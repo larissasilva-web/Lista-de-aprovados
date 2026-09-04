@@ -1,104 +1,140 @@
-import Link from "next/link";
-import { logout } from "@/app/actions/auth";
-import { obterUsuarioAtual } from "@/lib/auth/usuario-atual";
+import {
+  redirect,
+} from "next/navigation";
+
+import {
+  NavegacaoSistema,
+} from "@/components/sistema/navegacao-sistema";
+
+import {
+  exigirPermissao,
+} from "@/lib/auth/usuario-atual";
+
+import {
+  obterConfiguracoesSistema,
+} from "@/lib/configuracoes/obter-configuracoes";
+
+import {
+  obterFonteCss,
+} from "@/lib/configuracoes/tema";
+
+import {
+  createClient,
+} from "@/lib/supabase/server";
 
 export default async function SistemaLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children:
+    React.ReactNode;
 }>) {
-  const usuario = await obterUsuarioAtual();
+  const usuarioAutenticado =
+    await exigirPermissao([
+      "usuario",
+      "contratador",
+      "admin",
+    ]);
 
-  const podeGerenciarEditais =
-    usuario.tipoPermissao === "contratador" ||
-    usuario.tipoPermissao === "admin";
+  const supabase =
+    await createClient();
 
-  const admin =
-    usuario.tipoPermissao === "admin";
+  const [
+    configuracao,
+    resultadoPermissao,
+  ] = await Promise.all([
+    obterConfiguracoesSistema(),
 
-  const descricaoPermissao = {
-    usuario: "Usuário",
-    contratador: "Contratador",
-    admin: "Administrador",
-  };
+    supabase
+      .from("permissoes")
+      .select(`
+        nome,
+        email,
+        tipo_permissao
+      `)
+      .ilike(
+        "email",
+        usuarioAutenticado.email
+      )
+      .maybeSingle(),
+  ]);
+
+  const permissao =
+    resultadoPermissao.data;
+
+  if (!permissao) {
+    redirect(
+      "/login?erro=sem-permissao"
+    );
+  }
+
+  const tipoPermissao =
+    permissao.tipo_permissao as
+      | "usuario"
+      | "contratador"
+      | "admin";
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">
-              Lista de Aprovados
-            </h1>
-          </div>
+    <div
+      className="min-h-screen bg-slate-50"
+      style={{
+        color:
+          configuracao.corTextoPrincipal,
 
-          <div className="flex items-center gap-5">
-            <div className="text-right">
-              <p className="text-sm font-medium text-slate-800">
-                {usuario.nome}
-              </p>
+        fontFamily:
+          obterFonteCss(
+            configuracao.fonteSistema
+          ),
+      }}
+    >
+      {/* HEADER */}
 
-              <p className="text-xs text-slate-500">
-                {
-                  descricaoPermissao[
-                    usuario.tipoPermissao
-                  ]
-                }
-              </p>
+      <header className="flex h-16 items-center border-b border-slate-200 bg-white px-5 lg:px-7">
+        <div className="flex items-center gap-3">
+          {configuracao.logoHeaderUrl ? (
+            <img
+              src={
+                configuracao.logoHeaderUrl
+              }
+              alt="Logo"
+              className="h-10 max-w-40 object-contain"
+            />
+          ) : (
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
+              style={{
+                backgroundColor:
+                  configuracao.corPrimaria,
+              }}
+            >
+              LA
             </div>
+          )}
 
-            <form action={logout}>
-              <button
-                type="submit"
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Sair
-              </button>
-            </form>
-          </div>
+          <h1 className="text-lg font-semibold">
+            {
+              configuracao.tituloSistema
+            }
+          </h1>
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100vh-64px)]">
-        <aside className="w-64 border-r border-slate-200 bg-white p-4">
-          <nav className="space-y-1">
-            <Link
-              href="/lista"
-              className="block rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-            >
-              Lista
-            </Link>
+      <div className="lg:flex">
+        <NavegacaoSistema
+          usuario={{
+            nome:
+              permissao.nome,
 
-            {podeGerenciarEditais && (
-              <Link
-                href="/editais"
-                className="block rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-              >
-                Gerenciamento dos Editais
-              </Link>
-            )}
+            email:
+              permissao.email,
 
-            {admin && (
-              <Link
-                href="/permissoes"
-                className="block rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-              >
-                Permissões
-              </Link>
-            )}
+            tipoPermissao,
+          }}
+          configuracao={
+            configuracao
+          }
+        />
 
-            {admin && (
-              <Link
-                href="/configuracoes"
-                className="block rounded-lg px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-              >
-                Configurações
-              </Link>
-            )}
-          </nav>
-        </aside>
-
-        <main className="min-w-0 flex-1 p-8">
+        <main className="min-w-0 flex-1 p-5 lg:p-7">
           {children}
         </main>
       </div>

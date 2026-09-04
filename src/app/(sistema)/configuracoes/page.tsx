@@ -7,67 +7,33 @@ import {
 } from "@/lib/auth/usuario-atual";
 
 import {
-  createClient,
-} from "@/lib/supabase/server";
+  obterConfiguracoesSistema,
+} from "@/lib/configuracoes/obter-configuracoes";
 
 export default async function ConfiguracoesPage() {
   await exigirPermissao([
     "admin",
   ]);
 
-  const supabase =
-    await createClient();
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("configuracoes")
-    .select(`
-      id,
-      titulo_sistema,
-      cor_primaria,
-      logo_url
-    `)
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(
-      `Erro ao carregar configurações: ${error.message}`
-    );
-  }
+  const configuracao =
+    await obterConfiguracoesSistema();
 
   return (
     <section>
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-slate-900">
+        <h2 className="text-2xl font-semibold">
           Configurações
         </h2>
 
         <p className="mt-2 text-sm text-slate-500">
-          Personalize as informações gerais e a identidade visual do sistema.
+          Personalize a identidade visual e a aparência do sistema.
         </p>
       </div>
 
       <FormularioConfiguracoes
-        configuracaoInicial={{
-          id:
-            data?.id ??
-            null,
-
-          tituloSistema:
-            data?.titulo_sistema ??
-            "Lista de Aprovados",
-
-          corPrimaria:
-            data?.cor_primaria ??
-            "#094780",
-
-          logoUrl:
-            data?.logo_url ??
-            null,
-        }}
+        configuracaoInicial={
+          configuracao
+        }
       />
     </section>
   );

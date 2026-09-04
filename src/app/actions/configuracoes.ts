@@ -1,15 +1,46 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import {
+  revalidatePath,
+} from "next/cache";
 
-import { exigirPermissao } from "@/lib/auth/usuario-atual";
-import { createClient } from "@/lib/supabase/server";
+import {
+  exigirPermissao,
+} from "@/lib/auth/usuario-atual";
+
+import {
+  createClient,
+} from "@/lib/supabase/server";
+
+import {
+  FONTES_SISTEMA,
+  FonteSistema,
+} from "@/lib/configuracoes/tema";
 
 type DadosConfiguracao = {
-  id: string | null;
   tituloSistema: string;
+
   corPrimaria: string;
-  logoUrl: string | null;
+
+  logoLoginUrl: string | null;
+
+  imagemLoginUrl: string | null;
+
+  logoHeaderUrl: string | null;
+
+  corFundoLogin: string;
+
+  corCardLogin: string;
+
+  corTextoCardLogin: string;
+
+  corSidebar: string;
+
+  corTextoSidebar: string;
+
+  corTextoPrincipal: string;
+
+  fonteSistema: FonteSistema;
 };
 
 type Resultado = {
@@ -17,26 +48,24 @@ type Resultado = {
   mensagem: string;
 };
 
+function corValida(
+  cor: string
+) {
+  return /^#[0-9A-F]{6}$/.test(
+    cor.toUpperCase()
+  );
+}
+
 export async function salvarConfiguracoes(
   dados: DadosConfiguracao
 ): Promise<Resultado> {
   const adminAtual =
-    await exigirPermissao(["admin"]);
+    await exigirPermissao([
+      "admin",
+    ]);
 
   const tituloSistema =
     dados.tituloSistema.trim();
-
-  const corPrimaria =
-    dados.corPrimaria
-      .trim()
-      .toUpperCase();
-
-  const logoUrl =
-    dados.logoUrl?.trim() || null;
-
-  // ----------------------------------------------------------
-  // Validações
-  // ----------------------------------------------------------
 
   if (!tituloSistema) {
     return {
@@ -46,121 +75,175 @@ export async function salvarConfiguracoes(
     };
   }
 
+  const cores = [
+    dados.corPrimaria,
+    dados.corFundoLogin,
+    dados.corCardLogin,
+    dados.corTextoCardLogin,
+    dados.corSidebar,
+    dados.corTextoSidebar,
+    dados.corTextoPrincipal,
+  ].map((cor) =>
+    cor.toUpperCase()
+  );
+
   if (
-    tituloSistema.length > 100
+    cores.some(
+      (cor) =>
+        !corValida(cor)
+    )
   ) {
     return {
       sucesso: false,
       mensagem:
-        "O título do sistema pode possuir no máximo 100 caracteres.",
+        "Uma ou mais cores estão em formato inválido.",
     };
   }
 
-  const corValida =
-    /^#[0-9A-F]{6}$/.test(
-      corPrimaria
+  const fonteValida =
+    FONTES_SISTEMA.some(
+      (fonte) =>
+        fonte.valor ===
+        dados.fonteSistema
     );
 
-  if (!corValida) {
+  if (!fonteValida) {
     return {
       sucesso: false,
       mensagem:
-        "Informe uma cor hexadecimal válida. Exemplo: #094780.",
+        "Fonte inválida.",
     };
   }
 
   const supabase =
     await createClient();
 
-  // ----------------------------------------------------------
-  // Atualizar ou criar configuração
-  // ----------------------------------------------------------
+  const payload = {
+    titulo_sistema:
+      tituloSistema,
 
-  let erroConfiguracao;
+    cor_primaria:
+      dados.corPrimaria.toUpperCase(),
 
-  if (dados.id) {
+    logo_login_url:
+      dados.logoLoginUrl,
+
+    imagem_login_url:
+      dados.imagemLoginUrl,
+
+    logo_header_url:
+      dados.logoHeaderUrl,
+
+    cor_fundo_login:
+      dados.corFundoLogin.toUpperCase(),
+
+    cor_card_login:
+      dados.corCardLogin.toUpperCase(),
+
+    cor_texto_card_login:
+      dados.corTextoCardLogin.toUpperCase(),
+
+    cor_sidebar:
+      dados.corSidebar.toUpperCase(),
+
+    cor_texto_sidebar:
+      dados.corTextoSidebar.toUpperCase(),
+
+    cor_texto_principal:
+      dados.corTextoPrincipal.toUpperCase(),
+
+    fonte_sistema:
+      dados.fonteSistema,
+  };
+
+  const {
+    data: existente,
+    error: erroConsulta,
+  } = await supabase
+    .from("configuracoes")
+    .select("id")
+    .limit(1)
+    .maybeSingle();
+
+  if (erroConsulta) {
+    return {
+      sucesso: false,
+      mensagem:
+        `Erro ao consultar configurações: ${erroConsulta.message}`,
+    };
+  }
+
+  let erroSalvar;
+
+  if (existente) {
     const { error } =
       await supabase
         .from("configuracoes")
-        .update({
-          titulo_sistema:
-            tituloSistema,
-
-          cor_primaria:
-            corPrimaria,
-
-          logo_url:
-            logoUrl,
-        })
+        .update(payload)
         .eq(
           "id",
-          dados.id
+          existente.id
         );
 
-    erroConfiguracao =
+    erroSalvar =
       error;
   } else {
     const { error } =
       await supabase
         .from("configuracoes")
-        .insert({
-          titulo_sistema:
-            tituloSistema,
+        .insert(payload);
 
-          cor_primaria:
-            corPrimaria,
-
-          logo_url:
-            logoUrl,
-        });
-
-    erroConfiguracao =
+    erroSalvar =
       error;
   }
 
-  if (erroConfiguracao) {
+  if (erroSalvar) {
     return {
       sucesso: false,
       mensagem:
-        `Não foi possível salvar as configurações: ${erroConfiguracao.message}`,
+        `Não foi possível salvar: ${erroSalvar.message}`,
     };
   }
 
-  // ----------------------------------------------------------
-  // Registrar log
-  // ----------------------------------------------------------
+  const {
+    error: erroLog,
+  } = await supabase
+    .from("logs")
+    .insert({
+      usuario_alterou:
+        adminAtual.email,
 
-  const { error: erroLog } =
-    await supabase
-      .from("logs")
-      .insert({
-        usuario_alterou:
-          adminAtual.email,
+      alteracoes: {
+        acao:
+          "ATUALIZACAO_CONFIGURACOES",
 
-        alteracoes: {
-          acao:
-            "ATUALIZACAO_CONFIGURACOES",
+        titulo_sistema:
+          tituloSistema,
 
-          titulo_sistema:
-            tituloSistema,
+        fonte_sistema:
+          dados.fonteSistema,
 
-          cor_primaria:
-            corPrimaria,
+        cor_primaria:
+          dados.corPrimaria,
 
-          logo_url:
-            logoUrl,
-        },
-      });
+        cor_sidebar:
+          dados.corSidebar,
+      },
+    });
 
   if (erroLog) {
     console.error(
-      "Configuração salva, mas houve erro ao registrar o log:",
+      "Configuração salva, mas o log falhou:",
       erroLog
     );
   }
 
   revalidatePath(
     "/configuracoes"
+  );
+
+  revalidatePath(
+    "/login"
   );
 
   revalidatePath(
