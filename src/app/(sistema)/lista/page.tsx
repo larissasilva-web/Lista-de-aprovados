@@ -51,7 +51,7 @@ function classeStatus(
     case "Documentação Rejeitada":
       return "bg-purple-50 text-purple-700";
 
-    case "Vacância":
+    case "Desligamento":
       return "bg-orange-50 text-orange-700";
 
     case "Migração":
