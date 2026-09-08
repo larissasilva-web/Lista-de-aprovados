@@ -338,16 +338,17 @@ cargos = listaCargos
       }
     )
     .order(
-      "nota",
+      "classificacao",
       {
-        ascending: false,
+        ascending: true,
         nullsFirst: false,
       }
     )
     .order(
-      "nome",
+      "nota",
       {
-        ascending: true,
+        ascending: false,
+        nullsFirst: false,
       }
     )
     .range(
