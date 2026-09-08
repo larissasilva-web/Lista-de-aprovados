@@ -40,7 +40,7 @@ export default async function ResumoPage() {
       total_contratados,
       total_desistentes,
       total_documentacao_rejeitada,
-      total_vacancia,
+      total_desligamento,
       total_migracao
     `)
     .order(
@@ -120,9 +120,9 @@ export default async function ResumoPage() {
               0
           ),
 
-        total_vacancia:
+        total_desligamento:
           Number(
-            item.total_vacancia ??
+            item.total_desligamento??
               0
           ),
 
