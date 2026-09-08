@@ -1,135 +1,202 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  FormEvent,
+  useState,
+} from "react";
 
-import { createClient } from "@/lib/supabase/client";
+import {
+  useRouter,
+} from "next/navigation";
 
-type Candidato = {
-  id: string;
+import {
+  createClient,
+} from "@/lib/supabase/client";
+
+type Props = {
+  candidatoId: string;
+
   nome: string;
-  status: string;
-  processo_sei: string | null;
-  matricula: string | null;
+
+  statusAtual: string;
+
+  processoSeiAtual:
+    string | null;
+
+  matriculaAtual:
+    string | null;
+
+  editalAtivo: boolean;
 };
 
-type AlterarStatusModalProps = {
-  candidato: Candidato;
-};
-
-const STATUS_DISPONIVEIS = [
+const STATUS = [
   "Aprovado",
   "Convocado",
   "Contratado",
   "Desistente",
   "Documentação Rejeitada",
-] as const;
+  "Vacância",
+  "Migração",
+];
 
 export function AlterarStatusModal({
-  candidato,
-}: AlterarStatusModalProps) {
-  const router = useRouter();
+  candidatoId,
+  nome,
+  statusAtual,
+  processoSeiAtual,
+  matriculaAtual,
+  editalAtivo,
+}: Props) {
+  const router =
+    useRouter();
 
-  const [aberto, setAberto] = useState(false);
+  const [
+    aberto,
+    setAberto,
+  ] = useState(false);
 
-  const [status, setStatus] = useState(
-    candidato.status
+  const [
+    status,
+    setStatus,
+  ] = useState(
+    statusAtual
   );
 
-  const [processoSei, setProcessoSei] =
-    useState(candidato.processo_sei ?? "");
+  const [
+    processoSei,
+    setProcessoSei,
+  ] = useState(
+    processoSeiAtual ??
+      ""
+  );
 
-  const [matricula, setMatricula] =
-    useState(candidato.matricula ?? "");
+  const [
+    matricula,
+    setMatricula,
+  ] = useState(
+    matriculaAtual ??
+      ""
+  );
 
-  const [erro, setErro] = useState("");
-  const [salvando, setSalvando] =
-    useState(false);
+  const [
+    salvando,
+    setSalvando,
+  ] = useState(false);
 
-  function fecharModal() {
-    if (salvando) {
-      return;
-    }
+  const [
+    erro,
+    setErro,
+  ] = useState("");
 
-    setAberto(false);
-    setErro("");
-
-    setStatus(candidato.status);
-    setProcessoSei(
-      candidato.processo_sei ?? ""
-    );
-    setMatricula(
-      candidato.matricula ?? ""
-    );
-  }
-
-  async function salvarAlteracao(
-    event: React.FormEvent<HTMLFormElement>
+  async function salvar(
+    event:
+      FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
     setErro("");
 
-    if (
-      status === "Contratado" &&
-      !matricula.trim()
-    ) {
+    if (!editalAtivo) {
       setErro(
-        "A matrícula é obrigatória quando o status for Contratado."
+        "O edital está inativo. Não é possível alterar o status."
       );
 
       return;
     }
 
+    if (
+      status ===
+        "Contratado" &&
+      !matricula.trim()
+    ) {
+      setErro(
+        "A matrícula é obrigatória para candidatos contratados."
+      );
+
+      return;
+    }
+
+    setSalvando(true);
+
     try {
-      setSalvando(true);
+      const supabase =
+        createClient();
 
-      const supabase = createClient();
-
-      const { data, error } = await supabase
-        .from("lista_aprovados")
+      const {
+        error,
+      } = await supabase
+        .from(
+          "lista_aprovados"
+        )
         .update({
           status,
+
           processo_sei:
-            processoSei.trim() || null,
+            processoSei.trim() ||
+            null,
+
           matricula:
-            matricula.trim() || null,
+            matricula.trim() ||
+            null,
         })
-        .eq("id", candidato.id)
-        .select("id");
+        .eq(
+          "id",
+          candidatoId
+        );
 
       if (error) {
         throw error;
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error(
-          "A alteração não foi realizada. Verifique sua permissão."
-        );
       }
 
       setAberto(false);
 
       router.refresh();
     } catch (error) {
-      console.error(error);
-
       setErro(
         error instanceof Error
           ? error.message
           : "Não foi possível atualizar o candidato."
       );
     } finally {
-      setSalvando(false);
+      setSalvando(
+        false
+      );
     }
+  }
+
+  if (!editalAtivo) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="O edital está inativo."
+        className="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-400"
+      >
+        🔒 Alterar status
+      </button>
+    );
   }
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setAberto(true)}
-        className="rounded-lg border border-[#094780] px-3 py-2 text-xs font-medium text-[#094780] transition hover:bg-[#094780] hover:text-white"
+        onClick={() => {
+          setErro("");
+          setStatus(
+            statusAtual
+          );
+          setProcessoSei(
+            processoSeiAtual ??
+              ""
+          );
+          setMatricula(
+            matriculaAtual ??
+              ""
+          );
+          setAberto(true);
+        }}
+        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
       >
         Alterar status
       </button>
@@ -144,50 +211,71 @@ export function AlterarStatusModal({
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  {candidato.nome}
+                  {nome}
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={fecharModal}
-                disabled={salvando}
-                className="text-2xl leading-none text-slate-400 hover:text-slate-700"
-                aria-label="Fechar"
+                disabled={
+                  salvando
+                }
+                onClick={() =>
+                  setAberto(
+                    false
+                  )
+                }
+                className="text-2xl leading-none text-slate-400"
               >
                 ×
               </button>
             </div>
 
             <form
-              onSubmit={salvarAlteracao}
+              onSubmit={
+                salvar
+              }
               className="p-6"
             >
+              {erro && (
+                <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {erro}
+                </div>
+              )}
+
               <div className="space-y-5">
                 <div>
-                  <label
-                    htmlFor={`status-${candidato.id}`}
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
-                    Status Atualizado
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Status
                   </label>
 
                   <select
-                    id={`status-${candidato.id}`}
-                    value={status}
-                    onChange={(event) =>
+                    value={
+                      status
+                    }
+                    onChange={(
+                      event
+                    ) =>
                       setStatus(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     }
-                    disabled={salvando}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780]"
+                    disabled={
+                      salvando
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
                   >
-                    {STATUS_DISPONIVEIS.map(
+                    {STATUS.map(
                       (item) => (
                         <option
-                          key={item}
-                          value={item}
+                          key={
+                            item
+                          }
+                          value={
+                            item
+                          }
                         >
                           {item}
                         </option>
@@ -197,89 +285,92 @@ export function AlterarStatusModal({
                 </div>
 
                 <div>
-                  <label
-                    htmlFor={`processo-sei-${candidato.id}`}
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Processo SEI
                   </label>
 
                   <input
-                    id={`processo-sei-${candidato.id}`}
-                    type="text"
-                    value={processoSei}
-                    onChange={(event) =>
+                    value={
+                      processoSei
+                    }
+                    onChange={(
+                      event
+                    ) =>
                       setProcessoSei(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     }
-                    disabled={salvando}
-                    placeholder="Ex.: 25000.123456/2026-00"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780]"
+                    disabled={
+                      salvando
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
                 </div>
 
                 <div>
-                  <label
-                    htmlFor={`matricula-${candidato.id}`}
-                    className="mb-2 block text-sm font-medium text-slate-700"
-                  >
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Matrícula
                     {status ===
-                      "Contratado" && (
-                      <span className="ml-1 text-red-600">
-                        *
-                      </span>
-                    )}
+                      "Contratado" &&
+                      " *"}
                   </label>
 
                   <input
-                    id={`matricula-${candidato.id}`}
-                    type="text"
-                    value={matricula}
-                    onChange={(event) =>
+                    value={
+                      matricula
+                    }
+                    onChange={(
+                      event
+                    ) =>
                       setMatricula(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     }
-                    required={
-                      status === "Contratado"
+                    disabled={
+                      salvando
                     }
-                    disabled={salvando}
-                    placeholder="Informe a matrícula"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780]"
+                    required={
+                      status ===
+                      "Contratado"
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
 
                   {status ===
                     "Contratado" && (
                     <p className="mt-1.5 text-xs text-slate-500">
-                      Obrigatório para candidatos
-                      contratados.
+                      A matrícula é obrigatória quando o status for Contratado.
                     </p>
                   )}
                 </div>
-
-                {erro && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {erro}
-                  </div>
-                )}
               </div>
 
               <div className="mt-7 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={fecharModal}
-                  disabled={salvando}
-                  className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  disabled={
+                    salvando
+                  }
+                  onClick={() =>
+                    setAberto(
+                      false
+                    )
+                  }
+                  className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm"
                 >
                   Cancelar
                 </button>
 
                 <button
                   type="submit"
-                  disabled={salvando}
-                  className="rounded-lg bg-[#094780] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={
+                    salvando
+                  }
+                  className="rounded-lg bg-[#094780] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {salvando
                     ? "Salvando..."

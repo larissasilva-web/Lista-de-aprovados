@@ -1,191 +1,275 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 type Edital = {
   id: string;
   processo_seletivo: string;
   edital: string;
+  status_edital: boolean;
 };
 
-type FiltrosListaProps = {
-  processos: string[];
+type Props = {
   editais: Edital[];
   cargos: string[];
-
-  processoSelecionado: string;
-  editalSelecionado: string;
-  cargoSelecionado: string;
 };
 
 export function FiltrosLista({
-  processos,
   editais,
   cargos,
-  processoSelecionado,
-  editalSelecionado,
-  cargoSelecionado,
-}: FiltrosListaProps) {
+}: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams =
+    useSearchParams();
 
-  const editaisFiltrados = editais.filter(
-    (edital) =>
-      edital.processo_seletivo === processoSelecionado
+  const processoAtual =
+    searchParams.get("processo") ??
+    "";
+
+  const editalAtual =
+    searchParams.get("edital") ??
+    "";
+
+  const cargoAtual =
+    searchParams.get("cargo") ??
+    "";
+
+  const processos = Array.from(
+    new Set(
+      editais
+        .map(
+          (item) =>
+            item.processo_seletivo
+        )
+        .filter(Boolean)
+    )
+  ).sort((a, b) =>
+    a.localeCompare(
+      b,
+      "pt-BR"
+    )
   );
 
-  function alterarProcesso(novoProcesso: string) {
-    const params = new URLSearchParams();
+  const editaisFiltrados =
+    processoAtual
+      ? editais.filter(
+          (item) =>
+            item.processo_seletivo ===
+            processoAtual
+        )
+      : editais;
 
-    if (novoProcesso) {
-      params.set("processo", novoProcesso);
-    }
+  function navegar(
+    alteracoes: Record<
+      string,
+      string | null
+    >
+  ) {
+    const parametros =
+      new URLSearchParams(
+        searchParams.toString()
+      );
 
-    router.push(`/lista?${params.toString()}`);
+    Object.entries(
+      alteracoes
+    ).forEach(
+      ([chave, valor]) => {
+        if (valor) {
+          parametros.set(
+            chave,
+            valor
+          );
+        } else {
+          parametros.delete(
+            chave
+          );
+        }
+      }
+    );
+
+    parametros.delete(
+      "pagina"
+    );
+
+    const query =
+      parametros.toString();
+
+    router.push(
+      query
+        ? `${pathname}?${query}`
+        : pathname
+    );
   }
 
-  function alterarEdital(novoEdital: string) {
-    const params = new URLSearchParams();
-
-    if (processoSelecionado) {
-      params.set("processo", processoSelecionado);
-    }
-
-    if (novoEdital) {
-      params.set("edital", novoEdital);
-    }
-
-    router.push(`/lista?${params.toString()}`);
-  }
-
-  function alterarCargo(novoCargo: string) {
-    const params = new URLSearchParams();
-
-    if (processoSelecionado) {
-      params.set("processo", processoSelecionado);
-    }
-
-    if (editalSelecionado) {
-      params.set("edital", editalSelecionado);
-    }
-
-    if (novoCargo) {
-      params.set("cargo", novoCargo);
-    }
-
-    router.push(`/lista?${params.toString()}`);
-  }
-
-  function limparFiltros() {
-    router.push("/lista");
+  function limpar() {
+    router.push(
+      pathname
+    );
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div>
-          <label
-            htmlFor="processo"
-            className="mb-2 block text-sm font-medium text-slate-700"
-          >
-            Processo Seletivo
-          </label>
+    <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 md:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_auto]">
+      {/* PROCESSO */}
 
-          <select
-            id="processo"
-            value={processoSelecionado}
-            onChange={(event) =>
-              alterarProcesso(event.target.value)
-            }
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780]"
-          >
-            <option value="">
-              Selecione o processo seletivo
-            </option>
+      <div>
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Processo seletivo
+        </label>
 
-            {processos.map((processo) => (
-              <option key={processo} value={processo}>
+        <select
+          value={
+            processoAtual
+          }
+          onChange={(
+            event
+          ) =>
+            navegar({
+              processo:
+                event.target
+                  .value ||
+                null,
+
+              edital:
+                null,
+
+              cargo:
+                null,
+            })
+          }
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+        >
+          <option value="">
+            Todos
+          </option>
+
+          {processos.map(
+            (processo) => (
+              <option
+                key={
+                  processo
+                }
+                value={
+                  processo
+                }
+              >
                 {processo}
               </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label
-            htmlFor="edital"
-            className="mb-2 block text-sm font-medium text-slate-700"
-          >
-            Edital
-          </label>
-
-          <select
-            id="edital"
-            value={editalSelecionado}
-            onChange={(event) =>
-              alterarEdital(event.target.value)
-            }
-            disabled={!processoSelecionado}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-          >
-            <option value="">
-              {processoSelecionado
-                ? "Selecione o edital"
-                : "Selecione primeiro o processo"}
-            </option>
-
-            {editaisFiltrados.map((edital) => (
-              <option key={edital.id} value={edital.id}>
-                {edital.edital}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label
-            htmlFor="cargo"
-            className="mb-2 block text-sm font-medium text-slate-700"
-          >
-            Cargo
-          </label>
-
-          <select
-            id="cargo"
-            value={cargoSelecionado}
-            onChange={(event) =>
-              alterarCargo(event.target.value)
-            }
-            disabled={!editalSelecionado}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#094780] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-          >
-            <option value="">
-              {editalSelecionado
-                ? "Todos os cargos"
-                : "Selecione primeiro o edital"}
-            </option>
-
-            {cargos.map((cargo) => (
-              <option key={cargo} value={cargo}>
-                {cargo}
-              </option>
-            ))}
-          </select>
-        </div>
+            )
+          )}
+        </select>
       </div>
 
-      {(processoSelecionado ||
-        editalSelecionado ||
-        cargoSelecionado) && (
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={limparFiltros}
-            className="text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
-            Limpar filtros
-          </button>
-        </div>
-      )}
+      {/* EDITAL */}
+
+      <div>
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Edital
+        </label>
+
+        <select
+          value={
+            editalAtual
+          }
+          onChange={(
+            event
+          ) =>
+            navegar({
+              edital:
+                event.target
+                  .value ||
+                null,
+
+              cargo:
+                null,
+            })
+          }
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+        >
+          <option value="">
+            Todos
+          </option>
+
+          {editaisFiltrados.map(
+            (edital) => (
+              <option
+                key={
+                  edital.id
+                }
+                value={
+                  edital.id
+                }
+              >
+                {edital.edital}
+                {edital.status_edital
+                  ? ""
+                  : " — Inativo"}
+              </option>
+            )
+          )}
+        </select>
+      </div>
+
+      {/* CARGO */}
+
+      <div>
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Cargo
+        </label>
+
+        <select
+          value={
+            cargoAtual
+          }
+          disabled={
+            !editalAtual
+          }
+          onChange={(
+            event
+          ) =>
+            navegar({
+              cargo:
+                event.target
+                  .value ||
+                null,
+            })
+          }
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
+        >
+          <option value="">
+            {editalAtual
+              ? "Todos"
+              : "Selecione um edital"}
+          </option>
+
+          {cargos.map(
+            (cargo) => (
+              <option
+                key={cargo}
+                value={cargo}
+              >
+                {cargo}
+              </option>
+            )
+          )}
+        </select>
+      </div>
+
+      {/* LIMPAR */}
+
+      <div className="flex items-end">
+        <button
+          type="button"
+          onClick={limpar}
+          className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 xl:w-auto"
+        >
+          Limpar filtros
+        </button>
+      </div>
     </div>
   );
 }

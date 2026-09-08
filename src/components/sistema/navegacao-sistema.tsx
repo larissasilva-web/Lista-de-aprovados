@@ -7,21 +7,19 @@ import {
 } from "next/navigation";
 
 import {
-  useState,
+  ReactNode,
 } from "react";
-
-import {
-  createClient,
-} from "@/lib/supabase/client";
 
 import {
   ConfiguracaoSistema,
 } from "@/lib/configuracoes/tema";
 
+
 type TipoPermissao =
   | "usuario"
   | "contratador"
   | "admin";
+
 
 type Usuario = {
   nome: string;
@@ -30,172 +28,382 @@ type Usuario = {
     TipoPermissao;
 };
 
+
 type Props = {
   usuario: Usuario;
 
   configuracao:
     ConfiguracaoSistema;
+
+  recolhida: boolean;
+
+  mobileAberto: boolean;
+
+  onFecharMobile:
+    () => void;
 };
+
+
+type TipoIcone =
+  | "lista"
+  | "resumo"
+  | "editais"
+  | "usuarios"
+  | "configuracoes";
+
+
+function Icone({
+  tipo,
+}: {
+  tipo: TipoIcone;
+}) {
+  const classe =
+    "h-5 w-5 shrink-0";
+
+  const base = (
+    children:
+      ReactNode
+  ) => (
+    <svg
+      viewBox="0 0 24 24"
+      className={
+        classe
+      }
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+
+
+  switch (tipo) {
+    case "lista":
+      return base(
+        <>
+          <path d="M8 6h13" />
+          <path d="M8 12h13" />
+          <path d="M8 18h13" />
+          <path d="M3 6h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 18h.01" />
+        </>
+      );
+
+
+    case "resumo":
+      return base(
+        <>
+          <path d="M4 19V9" />
+          <path d="M10 19V5" />
+          <path d="M16 19v-7" />
+          <path d="M22 19H2" />
+        </>
+      );
+
+
+    case "editais":
+      return base(
+        <>
+          <path d="M6 2h9l5 5v15H6z" />
+          <path d="M14 2v6h6" />
+          <path d="M9 13h8" />
+          <path d="M9 17h8" />
+        </>
+      );
+
+
+    case "usuarios":
+      return base(
+        <>
+          <circle
+            cx="9"
+            cy="8"
+            r="4"
+          />
+          <path d="M3 21v-2a6 6 0 0 1 12 0v2" />
+          <path d="M17 11a4 4 0 0 1 4 4v2" />
+        </>
+      );
+
+
+    case "configuracoes":
+      return base(
+        <>
+          <circle
+            cx="12"
+            cy="12"
+            r="3"
+          />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06L7.04 4.3l.06.06a1.65 1.65 0 0 0 1.82.33h.01A1.65 1.65 0 0 0 10 3.18V3h4v.18a1.65 1.65 0 0 0 1.07 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9v.01A1.65 1.65 0 0 0 20.91 10H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z" />
+        </>
+      );
+  }
+}
+
 
 export function NavegacaoSistema({
   usuario,
   configuracao,
+  recolhida,
+  mobileAberto,
+  onFecharMobile,
 }: Props) {
   const pathname =
     usePathname();
 
-  const [
-    saindo,
-    setSaindo,
-  ] = useState(false);
 
-  const itens = [
+  const itens: {
+    nome: string;
+    href: string;
+    icone: TipoIcone;
+    perfis:
+      TipoPermissao[];
+  }[] = [
     {
       nome:
         "Lista de Aprovados",
+
       href:
         "/lista",
+
+      icone:
+        "lista",
+
       perfis: [
         "usuario",
         "contratador",
         "admin",
       ],
     },
+
+    {
+      nome:
+        "Resumo",
+
+      href:
+        "/resumo",
+
+      icone:
+        "resumo",
+
+      perfis: [
+        "usuario",
+        "contratador",
+        "admin",
+      ],
+    },
+
     {
       nome:
         "Editais",
+
       href:
         "/editais",
+
+      icone:
+        "editais",
+
       perfis: [
         "contratador",
         "admin",
       ],
     },
+
     {
       nome:
         "Permissões",
+
       href:
         "/permissoes",
+
+      icone:
+        "usuarios",
+
       perfis: [
         "admin",
       ],
     },
+
     {
       nome:
         "Configurações",
+
       href:
         "/configuracoes",
+
+      icone:
+        "configuracoes",
+
       perfis: [
         "admin",
       ],
     },
   ];
 
-  async function sair() {
-    setSaindo(true);
-
-    const supabase =
-      createClient();
-
-    await supabase.auth
-      .signOut();
-
-    window.location.href =
-      "/login";
-  }
-
-  const rotuloPerfil =
-    usuario.tipoPermissao ===
-    "admin"
-      ? "Administrador"
-      : usuario.tipoPermissao ===
-          "contratador"
-        ? "Contratador"
-        : "Usuário";
 
   return (
-    <aside
-      className="flex w-full shrink-0 flex-col lg:min-h-[calc(100vh-64px)] lg:w-64"
-      style={{
-        backgroundColor:
-          configuracao.corSidebar,
+    <>
+      {/* OVERLAY MOBILE */}
 
-        color:
-          configuracao.corTextoSidebar,
-      }}
-    >
-      <nav className="flex flex-1 gap-2 overflow-x-auto p-4 lg:flex-col lg:overflow-visible">
-        {itens
-          .filter((item) =>
-            item.perfis.includes(
-              usuario.tipoPermissao
-            )
-          )
-          .map((item) => {
-            const ativo =
-              pathname ===
-                item.href ||
-              pathname.startsWith(
-                `${item.href}/`
-              );
-
-            return (
-              <Link
-                key={
-                  item.href
-                }
-                href={
-                  item.href
-                }
-                className="whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition"
-                style={{
-                  backgroundColor:
-                    ativo
-                      ? configuracao.corPrimaria
-                      : "transparent",
-
-                  color:
-                    ativo
-                      ? "#FFFFFF"
-                      : configuracao.corTextoSidebar,
-                }}
-              >
-                {
-                  item.nome
-                }
-              </Link>
-            );
-          })}
-      </nav>
-
-      <div className="hidden border-t border-white/10 p-4 lg:block">
-        <p className="truncate text-sm font-medium">
-          {
-            usuario.nome
-          }
-        </p>
-
-        <p className="mt-1 truncate text-xs opacity-70">
-          {
-            usuario.email
-          }
-        </p>
-
-        <p className="mt-1 text-xs opacity-70">
-          {rotuloPerfil}
-        </p>
-
+      {mobileAberto && (
         <button
           type="button"
-          onClick={sair}
-          disabled={saindo}
-          className="mt-4 w-full rounded-lg border border-white/20 px-3 py-2 text-sm transition hover:bg-white/10 disabled:opacity-50"
-        >
-          {saindo
-            ? "Saindo..."
-            : "Sair"}
-        </button>
-      </div>
-    </aside>
+          aria-label="Fechar menu"
+          onClick={
+            onFecharMobile
+          }
+          className="fixed inset-0 top-16 z-30 bg-black/40 lg:hidden"
+        />
+      )}
+
+
+      {/* SIDEBAR */}
+
+      <aside
+        className={`
+          fixed bottom-0 left-0 top-16 z-40
+          flex flex-col
+          overflow-y-auto
+          transition-all duration-200
+
+          ${
+            mobileAberto
+              ? "translate-x-0"
+              : "-translate-x-full"
+          }
+
+          w-64
+
+          lg:sticky
+          lg:top-16
+          lg:z-20
+          lg:h-[calc(100vh-4rem)]
+          lg:translate-x-0
+
+          ${
+            recolhida
+              ? "lg:w-20"
+              : "lg:w-64"
+          }
+        `}
+        style={{
+          backgroundColor:
+            configuracao.corSidebar,
+
+          color:
+            configuracao.corTextoSidebar,
+        }}
+      >
+        <nav className="flex flex-1 flex-col gap-1.5 p-3">
+
+          {itens
+            .filter(
+              (item) =>
+                item.perfis.includes(
+                  usuario.tipoPermissao
+                )
+            )
+            .map(
+              (item) => {
+                const ativo =
+                  pathname ===
+                    item.href ||
+                  pathname.startsWith(
+                    `${item.href}/`
+                  );
+
+
+                return (
+                  <Link
+                    key={
+                      item.href
+                    }
+                    href={
+                      item.href
+                    }
+                    title={
+                      recolhida
+                        ? item.nome
+                        : undefined
+                    }
+                    onClick={
+                      onFecharMobile
+                    }
+                    className={`
+                      flex
+                      min-h-11
+                      items-center
+                      gap-3
+                      rounded-lg
+                      px-3
+                      text-sm
+                      font-medium
+                      transition
+
+                      ${
+                        recolhida
+                          ? "lg:justify-center"
+                          : ""
+                      }
+                    `}
+                    style={{
+                      backgroundColor:
+                        ativo
+                          ? configuracao.corPrimaria
+                          : "transparent",
+
+                      color:
+                        ativo
+                          ? "#FFFFFF"
+                          : configuracao.corTextoSidebar,
+                    }}
+                  >
+                    <Icone
+                      tipo={
+                        item.icone
+                      }
+                    />
+
+                    <span
+                      className={
+                        recolhida
+                          ? "lg:hidden"
+                          : ""
+                      }
+                    >
+                      {
+                        item.nome
+                      }
+                    </span>
+                  </Link>
+                );
+              }
+            )}
+
+        </nav>
+
+
+        {/* PERFIL NO MOBILE */}
+
+        <div className="border-t border-white/10 p-4 lg:hidden">
+          <p className="truncate text-sm font-medium">
+            {
+              usuario.nome
+            }
+          </p>
+
+          <p className="mt-1 truncate text-xs opacity-70">
+            {
+              usuario.email
+            }
+          </p>
+        </div>
+
+      </aside>
+    </>
   );
 }

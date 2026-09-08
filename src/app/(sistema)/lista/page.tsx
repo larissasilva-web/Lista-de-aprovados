@@ -1,23 +1,43 @@
 import Link from "next/link";
 
-import { AlterarStatusModal } from "@/components/lista/alterar-status-modal";
-import { FiltrosLista } from "@/components/lista/filtros-lista";
-import { obterUsuarioAtual } from "@/lib/auth/usuario-atual";
-import { createClient } from "@/lib/supabase/server";
+import {
+  AdicionarSubJudiceModal,
+} from "@/components/lista/adicionar-sub-judice-modal";
 
-type ListaPageProps = {
+import {
+  AlterarStatusModal,
+} from "@/components/lista/alterar-status-modal";
+
+import {
+  FiltrosLista,
+} from "@/components/lista/filtros-lista";
+
+import {
+  RemoverSubJudiceButton,
+} from "@/components/lista/remover-sub-judice-button";
+
+import {
+  exigirPermissao,
+} from "@/lib/auth/usuario-atual";
+
+import {
+  createClient,
+} from "@/lib/supabase/server";
+
+type PageProps = {
   searchParams: Promise<{
     processo?: string;
     edital?: string;
     cargo?: string;
     pagina?: string;
-    erro?: string;
   }>;
 };
 
-const ITENS_POR_PAGINA = 50;
+const POR_PAGINA = 50;
 
-function classeStatus(status: string) {
+function classeStatus(
+  status: string
+) {
   switch (status) {
     case "Contratado":
       return "bg-emerald-50 text-emerald-700";
@@ -31,139 +51,241 @@ function classeStatus(status: string) {
     case "Documentação Rejeitada":
       return "bg-purple-50 text-purple-700";
 
-    case "Aprovado":
+    case "Vacância":
+      return "bg-orange-50 text-orange-700";
+
+    case "Migração":
+      return "bg-cyan-50 text-cyan-700";
+
     default:
       return "bg-amber-50 text-amber-700";
   }
 }
 
+function formatarNota(
+  nota: number | null
+) {
+  if (
+    nota === null ||
+    nota === undefined
+  ) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat(
+    "pt-BR",
+    {
+      minimumFractionDigits:
+        0,
+
+      maximumFractionDigits:
+        2,
+    }
+  ).format(
+    Number(nota)
+  );
+}
+
 export default async function ListaPage({
   searchParams,
-}: ListaPageProps) {
-  const params = await searchParams;
+}: PageProps) {
+  const parametros =
+    await searchParams;
 
-  const usuario = await obterUsuarioAtual();
-  const supabase = await createClient();
+  const usuarioAtual =
+    await exigirPermissao([
+      "usuario",
+      "contratador",
+      "admin",
+    ]);
 
-  const processoSelecionado =
-    params.processo?.trim() ?? "";
+  const supabase =
+    await createClient();
 
-  const editalSelecionado =
-    params.edital?.trim() ?? "";
+  // ==========================================================
+  // PERFIL ATUAL
+  // ==========================================================
 
-  const cargoSelecionado =
-    params.cargo?.trim() ?? "";
+  const {
+    data: permissaoAtual,
+  } = await supabase
+    .from("permissoes")
+    .select(
+      "tipo_permissao"
+    )
+    .ilike(
+      "email",
+      usuarioAtual.email
+    )
+    .maybeSingle();
 
-  const paginaInformada = Number(params.pagina ?? "1");
+  const tipoPermissao =
+    permissaoAtual?.tipo_permissao ??
+    "usuario";
 
-  const paginaAtual =
-    Number.isInteger(paginaInformada) &&
-    paginaInformada > 0
-      ? paginaInformada
-      : 1;
+  const podeAlterar =
+    tipoPermissao ===
+      "contratador" ||
+    tipoPermissao ===
+      "admin";
 
-  const podeAlterarStatus =
-    usuario.tipoPermissao === "contratador" ||
-    usuario.tipoPermissao === "admin";
-
-  // =========================================================
-  // EDITAIS ATIVOS
-  // =========================================================
+  // ==========================================================
+  // EDITAIS
+  //
+  // IMPORTANTE:
+  // não filtramos mais status_edital = true.
+  // ==========================================================
 
   const {
     data: editaisData,
-    error: editaisError,
+    error: erroEditais,
   } = await supabase
     .from("editais")
     .select(`
       id,
       processo_seletivo,
-      edital
+      edital,
+      status_edital
     `)
-    .eq("status_edital", true)
-    .order("processo_seletivo")
-    .order("edital");
-
-  if (editaisError) {
-    throw new Error(
-      `Erro ao carregar editais: ${editaisError.message}`
-    );
-  }
-
-  const editais = editaisData ?? [];
-
-  // =========================================================
-  // PROCESSOS SELETIVOS
-  // =========================================================
-
-  const processos = Array.from(
-    new Set(
-      editais.map(
-        (item) => item.processo_seletivo
-      )
-    )
-  );
-
-  // =========================================================
-  // CARGOS DO EDITAL SELECIONADO
-  // =========================================================
-
-  let cargos: string[] = [];
-
-  if (editalSelecionado) {
-    const {
-      data: cargosData,
-      error: cargosError,
-    } = await supabase.rpc(
-      "listar_cargos_edital",
+    .order(
+      "processo_seletivo",
       {
-        p_edital_id: editalSelecionado,
+        ascending: true,
+      }
+    )
+    .order(
+      "edital",
+      {
+        ascending: true,
       }
     );
 
-    if (cargosError) {
+  if (erroEditais) {
+    throw new Error(
+      `Erro ao carregar editais: ${erroEditais.message}`
+    );
+  }
+
+  const editais =
+    editaisData ?? [];
+
+  const mapaEditais =
+    new Map(
+      editais.map(
+        (item) => [
+          item.id,
+          item,
+        ]
+      )
+    );
+
+  const editalId =
+    parametros.edital ??
+    "";
+
+  const editalSelecionado =
+    editalId
+      ? mapaEditais.get(
+          editalId
+        )
+      : undefined;
+
+  // ==========================================================
+  // CARGOS DO EDITAL SELECIONADO
+  // ==========================================================
+
+  let cargos:
+    string[] = [];
+
+  if (editalId) {
+    const {
+      data: cargosData,
+      error:
+        erroCargos,
+    } =
+      await supabase.rpc(
+        "listar_cargos_edital",
+        {
+          p_edital_id:
+            editalId,
+        }
+      );
+
+    if (erroCargos) {
       throw new Error(
-        `Erro ao carregar cargos: ${cargosError.message}`
+        `Erro ao carregar cargos: ${erroCargos.message}`
       );
     }
 
-    cargos =
-      cargosData?.map(
-        (item: { cargo: string }) => item.cargo
-      ) ?? [];
+    const listaCargos =
+  (cargosData ?? []) as {
+    cargo: string | null;
+  }[];
+
+cargos = listaCargos
+  .map(
+    (item) =>
+      item.cargo
+  )
+  .filter(
+    (
+      cargo: string | null
+    ): cargo is string =>
+      Boolean(cargo)
+  );
   }
 
-  // =========================================================
-  // LISTA DOS CANDIDATOS
-  // =========================================================
+  // ==========================================================
+  // PAGINAÇÃO
+  // ==========================================================
 
-  let aprovados: {
-    id: string;
-    cargo: string;
-    classificacao: number;
-    nome: string;
-    status: string;
-    processo_sei: string | null;
-    matricula: string | null;
-  }[] = [];
+  const paginaInformada =
+    Number(
+      parametros.pagina ??
+        "1"
+    );
 
-  let totalRegistros = 0;
+  const pagina =
+    Number.isFinite(
+      paginaInformada
+    ) &&
+    paginaInformada > 0
+      ? Math.floor(
+          paginaInformada
+        )
+      : 1;
 
-  if (editalSelecionado) {
-    const inicio =
-      (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const inicio =
+    (pagina - 1) *
+    POR_PAGINA;
 
-    const fim =
-      inicio + ITENS_POR_PAGINA - 1;
+  const fim =
+    inicio +
+    POR_PAGINA -
+    1;
 
-    let consulta = supabase
-      .from("lista_aprovados")
+  // ==========================================================
+  // CANDIDATOS
+  // ==========================================================
+
+  let consulta =
+    supabase
+      .from(
+        "lista_aprovados"
+      )
       .select(
         `
           id,
+          edital_id,
+          processo_seletivo,
+          edital,
           cargo,
           classificacao,
+          nota,
           nome,
+          modalidade_candidatura,
+          sub_judice,
+          origem_cadastro,
           status,
           processo_sei,
           matricula
@@ -171,278 +293,443 @@ export default async function ListaPage({
         {
           count: "exact",
         }
-      )
-      .eq("edital_id", editalSelecionado);
-
-    if (cargoSelecionado) {
-      consulta = consulta.eq(
-        "cargo",
-        cargoSelecionado
       );
-    }
 
-    const {
-      data,
-      error,
-      count,
-    } = await consulta
-      .order("cargo")
-      .order("classificacao")
-      .range(inicio, fim);
-
-    if (error) {
-      throw new Error(
-        `Erro ao carregar candidatos: ${error.message}`
+  if (
+    parametros.processo
+  ) {
+    consulta =
+      consulta.eq(
+        "processo_seletivo",
+        parametros.processo
       );
-    }
-
-    aprovados = data ?? [];
-    totalRegistros = count ?? 0;
   }
 
-  const totalPaginas = Math.max(
-    1,
-    Math.ceil(
-      totalRegistros / ITENS_POR_PAGINA
-    )
-  );
+  if (editalId) {
+    consulta =
+      consulta.eq(
+        "edital_id",
+        editalId
+      );
+  }
 
-  function montarUrlPagina(
-    pagina: number
+  if (
+    parametros.cargo
   ) {
-    const query = new URLSearchParams();
+    consulta =
+      consulta.eq(
+        "cargo",
+        parametros.cargo
+      );
+  }
 
-    if (processoSelecionado) {
+  const {
+    data:
+      candidatosData,
+    error:
+      erroCandidatos,
+    count,
+  } = await consulta
+    .order(
+      "cargo",
+      {
+        ascending: true,
+      }
+    )
+    .order(
+      "nota",
+      {
+        ascending: false,
+        nullsFirst: false,
+      }
+    )
+    .order(
+      "nome",
+      {
+        ascending: true,
+      }
+    )
+    .range(
+      inicio,
+      fim
+    );
+
+  if (
+    erroCandidatos
+  ) {
+    throw new Error(
+      `Erro ao carregar candidatos: ${erroCandidatos.message}`
+    );
+  }
+
+  const candidatos =
+    candidatosData ?? [];
+
+  const total =
+    count ?? 0;
+
+  const totalPaginas =
+    Math.max(
+      1,
+      Math.ceil(
+        total /
+          POR_PAGINA
+      )
+    );
+
+  function urlPagina(
+    novaPagina: number
+  ) {
+    const query =
+      new URLSearchParams();
+
+    if (
+      parametros.processo
+    ) {
       query.set(
         "processo",
-        processoSelecionado
+        parametros.processo
       );
     }
 
-    if (editalSelecionado) {
+    if (editalId) {
       query.set(
         "edital",
-        editalSelecionado
+        editalId
       );
     }
 
-    if (cargoSelecionado) {
+    if (
+      parametros.cargo
+    ) {
       query.set(
         "cargo",
-        cargoSelecionado
+        parametros.cargo
       );
     }
 
-    query.set("pagina", String(pagina));
+    query.set(
+      "pagina",
+      String(
+        novaPagina
+      )
+    );
 
     return `/lista?${query.toString()}`;
   }
 
   return (
     <section>
-      {params.erro === "sem-permissao" && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Você não possui permissão para acessar essa área.
+      {/* CABEÇALHO */}
+
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Lista de Aprovados
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Consulte e gerencie os candidatos dos processos seletivos.
+          </p>
         </div>
-      )}
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-slate-900">
-          Lista de Aprovados
-        </h2>
-
-        <p className="mt-2 text-sm text-slate-500">
-          Consulte e acompanhe os candidatos dos
-          processos seletivos.
-        </p>
+        {podeAlterar &&
+          (editalSelecionado ? (
+            <AdicionarSubJudiceModal
+              editalId={
+                editalSelecionado.id
+              }
+              editalNome={
+                editalSelecionado.edital
+              }
+              cargos={
+                cargos
+              }
+            />
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Selecione um edital para adicionar um candidato Sub judice."
+              className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-medium text-slate-500"
+            >
+              + Sub judice
+            </button>
+          ))}
       </div>
 
+      {/* FILTROS */}
+
       <FiltrosLista
-        processos={processos}
-        editais={editais}
-        cargos={cargos}
-        processoSelecionado={
-          processoSelecionado
+        editais={
+          editais
         }
-        editalSelecionado={
-          editalSelecionado
-        }
-        cargoSelecionado={
-          cargoSelecionado
+        cargos={
+          cargos
         }
       />
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        {!editalSelecionado ? (
-          <div className="px-6 py-16 text-center">
-            <p className="font-medium text-slate-700">
-              Selecione um processo seletivo e um edital
-            </p>
+      {/* AVISO EDITAL INATIVO */}
 
-            <p className="mt-1 text-sm text-slate-500">
-              Os candidatos serão exibidos aqui.
-            </p>
+      {editalSelecionado &&
+        !editalSelecionado.status_edital && (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+            <strong>
+              Edital inativo.
+            </strong>{" "}
+            Os candidatos permanecem disponíveis para consulta, mas alterações de status estão bloqueadas. A inclusão ou remoção de candidatos Sub judice continua disponível.
           </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <p className="text-sm font-medium text-slate-700">
-                  Candidatos
-                </p>
+        )}
 
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {totalRegistros} registro
-                  {totalRegistros === 1
-                    ? ""
-                    : "s"} encontrado
-                  {totalRegistros === 1
-                    ? ""
-                    : "s"}
-                </p>
-              </div>
-            </div>
+      {/* TOTAL */}
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px]">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Cargo
-                    </th>
+      <div className="mt-6 flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          {total.toLocaleString(
+            "pt-BR"
+          )}{" "}
+          candidato
+          {total === 1
+            ? ""
+            : "s"}
+        </p>
 
-                    <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Classificação
-                    </th>
+        <p className="text-sm text-slate-500">
+          Página {pagina} de{" "}
+          {totalPaginas}
+        </p>
+      </div>
 
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Nome
-                    </th>
+      {/* TABELA */}
 
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Status
-                    </th>
+      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1040px] text-sm">
+            <thead className="bg-slate-50">
+              <tr className="border-b border-slate-200">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase text-slate-500">
+                  Cargo
+                </th>
 
-                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase text-slate-500">
+                  Classificação
+                </th>
 
-                <tbody className="divide-y divide-slate-100">
-                  {aprovados.map(
-                    (aprovado) => (
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase text-slate-500">
+                  Nome
+                </th>
+
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase text-slate-500">
+                  Modalidade
+                </th>
+
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase text-slate-500">
+                  Nota
+                </th>
+
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase text-slate-500">
+                  Status
+                </th>
+
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase text-slate-500">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {candidatos.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan={
+                      7
+                    }
+                    className="px-5 py-12 text-center text-sm text-slate-500"
+                  >
+                    Nenhum candidato encontrado.
+                  </td>
+                </tr>
+              ) : (
+                candidatos.map(
+                  (
+                    candidato
+                  ) => {
+                    const edital =
+                      mapaEditais.get(
+                        candidato.edital_id
+                      );
+
+                    const editalAtivo =
+                      edital?.status_edital ??
+                      false;
+
+                    return (
                       <tr
-                        key={aprovado.id}
-                        className="transition hover:bg-slate-50"
+                        key={
+                          candidato.id
+                        }
+                        className="hover:bg-slate-50/50"
                       >
-                        <td className="px-5 py-4 text-sm text-slate-700">
-                          {aprovado.cargo}
-                        </td>
+                        {/* CARGO */}
 
-                        <td className="px-5 py-4 text-center text-sm font-medium text-slate-900">
+                        <td className="px-4 py-4 text-sm text-slate-700">
                           {
-                            aprovado.classificacao
+                            candidato.cargo
                           }
                         </td>
 
-                        <td className="px-5 py-4 text-sm font-medium text-slate-900">
-                          {aprovado.nome}
+                        {/* CLASSIFICAÇÃO */}
+
+                        <td className="px-4 py-4 text-sm">
+                          {candidato.sub_judice ? (
+                            <span className="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                              Sub judice
+                            </span>
+                          ) : (
+                            <span className="text-slate-700">
+                              {candidato.classificacao ??
+                                "—"}
+                            </span>
+                          )}
                         </td>
 
-                        <td className="px-5 py-4">
+                        {/* NOME */}
+
+                        <td className="px-4 py-4">
+                          <div className="text-sm font-medium text-slate-900">
+                            {
+                              candidato.nome
+                            }
+                          </div>
+
+                          {!editalAtivo && (
+                            <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+                              Edital inativo
+                            </span>
+                          )}
+                        </td>
+
+                        {/* MODALIDADE */}
+
+                        <td className="px-4 py-4 text-sm text-slate-600">
+                          {candidato.modalidade_candidatura ||
+                            "—"}
+                        </td>
+
+                        {/* NOTA */}
+
+                        <td className="px-4 py-4 text-right text-sm font-medium text-slate-700">
+                          {formatarNota(
+                            candidato.nota
+                          )}
+                        </td>
+
+                        {/* STATUS */}
+
+                        <td className="px-4 py-4">
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${classeStatus(
-                              aprovado.status
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${classeStatus(
+                              candidato.status
                             )}`}
                           >
-                            {aprovado.status}
+                            {
+                              candidato.status
+                            }
                           </span>
                         </td>
 
-                        <td className="px-5 py-4 text-right">
-                          {podeAlterarStatus ? (
-  <AlterarStatusModal
-    candidato={{
-      id: aprovado.id,
-      nome: aprovado.nome,
-      status: aprovado.status,
-      processo_sei:
-        aprovado.processo_sei,
-      matricula:
-        aprovado.matricula,
-    }}
-  />
-) : (
-  <span className="text-xs text-slate-400">
-    Somente leitura
-  </span>
-)}
-                          
+                        {/* AÇÕES */}
+
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-1.5">
+                            {podeAlterar ? (
+                              <>
+                                <AlterarStatusModal
+                                  candidatoId={
+                                    candidato.id
+                                  }
+                                  nome={
+                                    candidato.nome
+                                  }
+                                  statusAtual={
+                                    candidato.status
+                                  }
+                                  processoSeiAtual={
+                                    candidato.processo_sei
+                                  }
+                                  matriculaAtual={
+                                    candidato.matricula
+                                  }
+                                  editalAtivo={
+                                    editalAtivo
+                                  }
+                                />
+
+                                {candidato.sub_judice && (
+                                  <RemoverSubJudiceButton
+                                    candidatoId={
+                                      candidato.id
+                                    }
+                                    nome={
+                                      candidato.nome
+                                    }
+                                  />
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-slate-400">
+                                Somente leitura
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                    )
-                  )}
-
-                  {aprovados.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-6 py-16 text-center text-sm text-slate-500"
-                      >
-                        Nenhum candidato encontrado
-                        para os filtros selecionados.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {totalRegistros > 0 && (
-              <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
-                <p className="text-sm text-slate-500">
-                  Página {paginaAtual} de{" "}
-                  {totalPaginas}
-                </p>
-
-                <div className="flex gap-2">
-                  {paginaAtual > 1 ? (
-                    <Link
-                      href={montarUrlPagina(
-                        paginaAtual - 1
-                      )}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Anterior
-                    </Link>
-                  ) : (
-                    <span className="cursor-not-allowed rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-300">
-                      Anterior
-                    </span>
-                  )}
-
-                  {paginaAtual <
-                  totalPaginas ? (
-                    <Link
-                      href={montarUrlPagina(
-                        paginaAtual + 1
-                      )}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Próxima
-                    </Link>
-                  ) : (
-                    <span className="cursor-not-allowed rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-300">
-                      Próxima
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* PAGINAÇÃO */}
+
+      {totalPaginas >
+        1 && (
+        <div className="mt-5 flex items-center justify-between">
+          {pagina >
+          1 ? (
+            <Link
+              href={urlPagina(
+                pagina -
+                  1
+              )}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+            >
+              ← Anterior
+            </Link>
+          ) : (
+            <span />
+          )}
+
+          {pagina <
+          totalPaginas ? (
+            <Link
+              href={urlPagina(
+                pagina +
+                  1
+              )}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white"
+            >
+              Próxima →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </div>
+      )}
     </section>
   );
 }
