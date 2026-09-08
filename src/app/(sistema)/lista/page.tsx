@@ -29,6 +29,7 @@ type PageProps = {
     processo?: string;
     edital?: string;
     cargo?: string;
+    nome?: string;
     pagina?: string;
   }>;
 };
@@ -322,6 +323,15 @@ cargos = listaCargos
         parametros.cargo
       );
   }
+  if (
+  parametros.nome?.trim()
+) {
+  consulta =
+    consulta.ilike(
+      "nome",
+      `%${parametros.nome.trim()}%`
+    );
+}
 
   const {
     data:
@@ -414,7 +424,14 @@ cargos = listaCargos
         novaPagina
       )
     );
-
+    if (
+  parametros.nome
+) {
+  query.set(
+    "nome",
+    parametros.nome
+  );
+}
     return `/lista?${query.toString()}`;
   }
 
