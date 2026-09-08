@@ -35,7 +35,7 @@ const STATUS = [
   "Contratado",
   "Desistente",
   "Documentação Rejeitada",
-  "Vacância",
+  "Desligamento",
   "Migração",
 ];
 
