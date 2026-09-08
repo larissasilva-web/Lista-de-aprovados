@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -41,6 +42,10 @@ export function FiltrosLista({
     useSearchParams();
 
 
+  // ==========================================================
+  // FILTROS ATUAIS DA URL
+  // ==========================================================
+
   const processoAtual =
     searchParams.get(
       "processo"
@@ -57,6 +62,10 @@ export function FiltrosLista({
     ) ?? "";
 
 
+  // ==========================================================
+  // CAMPOS DE PESQUISA
+  // ==========================================================
+
   const [
     buscaEdital,
     setBuscaEdital,
@@ -66,6 +75,11 @@ export function FiltrosLista({
     buscaCargo,
     setBuscaCargo,
   ] = useState("");
+
+
+  // ==========================================================
+  // CONTROLE DOS DROPDOWNS
+  // ==========================================================
 
   const [
     mostrarEditais,
@@ -79,30 +93,43 @@ export function FiltrosLista({
 
 
   // ==========================================================
+  // REFERÊNCIAS PARA DETECTAR CLIQUE FORA
+  // ==========================================================
+
+  const editalRef =
+    useRef<HTMLDivElement>(
+      null
+    );
+
+  const cargoRef =
+    useRef<HTMLDivElement>(
+      null
+    );
+
+
+  // ==========================================================
   // PROCESSOS SELETIVOS
   // ==========================================================
 
   const processos =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            editais
-              .map(
-                (item) =>
-                  item.processo_seletivo
-              )
-              .filter(Boolean)
-          )
-        ).sort(
-          (a, b) =>
-            a.localeCompare(
-              b,
-              "pt-BR"
+    useMemo(() => {
+      return Array.from(
+        new Set(
+          editais
+            .map(
+              (item) =>
+                item.processo_seletivo
             )
-        ),
-      [editais]
-    );
+            .filter(Boolean)
+        )
+      ).sort(
+        (a, b) =>
+          a.localeCompare(
+            b,
+            "pt-BR"
+          )
+      );
+    }, [editais]);
 
 
   // ==========================================================
@@ -110,22 +137,20 @@ export function FiltrosLista({
   // ==========================================================
 
   const editalSelecionado =
-    useMemo(
-      () =>
-        editais.find(
-          (item) =>
-            item.id ===
-            editalAtual
-        ),
-      [
-        editais,
-        editalAtual,
-      ]
-    );
+    useMemo(() => {
+      return editais.find(
+        (item) =>
+          item.id ===
+          editalAtual
+      );
+    }, [
+      editais,
+      editalAtual,
+    ]);
 
 
   // ==========================================================
-  // SINCRONIZAR CAMPOS
+  // SINCRONIZAR EDITAL COM A URL
   // ==========================================================
 
   useEffect(() => {
@@ -143,6 +168,10 @@ export function FiltrosLista({
   ]);
 
 
+  // ==========================================================
+  // SINCRONIZAR CARGO COM A URL
+  // ==========================================================
+
   useEffect(() => {
     setBuscaCargo(
       cargoAtual
@@ -153,7 +182,132 @@ export function FiltrosLista({
 
 
   // ==========================================================
-  // EDITAIS DO PROCESSO
+  // FECHAR DROPDOWN AO CLICAR FORA
+  // ==========================================================
+
+  useEffect(() => {
+    function clicarFora(
+      event: MouseEvent
+    ) {
+      const alvo =
+        event.target as Node;
+
+
+      // ------------------------------------------------------
+      // EDITAL
+      // ------------------------------------------------------
+
+      if (
+        editalRef.current &&
+        !editalRef.current.contains(
+          alvo
+        )
+      ) {
+        setMostrarEditais(
+          false
+        );
+
+        // Se digitou alguma coisa,
+        // mas não selecionou outro edital,
+        // volta a mostrar o edital realmente aplicado.
+        if (
+          editalSelecionado
+        ) {
+          setBuscaEdital(
+            editalSelecionado.edital
+          );
+        } else {
+          setBuscaEdital("");
+        }
+      }
+
+
+      // ------------------------------------------------------
+      // CARGO
+      // ------------------------------------------------------
+
+      if (
+        cargoRef.current &&
+        !cargoRef.current.contains(
+          alvo
+        )
+      ) {
+        setMostrarCargos(
+          false
+        );
+
+        // Mesma lógica para o cargo.
+        setBuscaCargo(
+          cargoAtual
+        );
+      }
+    }
+
+
+    function pressionarTecla(
+      event: KeyboardEvent
+    ) {
+      if (
+        event.key ===
+        "Escape"
+      ) {
+        setMostrarEditais(
+          false
+        );
+
+        setMostrarCargos(
+          false
+        );
+
+
+        if (
+          editalSelecionado
+        ) {
+          setBuscaEdital(
+            editalSelecionado.edital
+          );
+        } else {
+          setBuscaEdital("");
+        }
+
+
+        setBuscaCargo(
+          cargoAtual
+        );
+      }
+    }
+
+
+    document.addEventListener(
+      "mousedown",
+      clicarFora
+    );
+
+    document.addEventListener(
+      "keydown",
+      pressionarTecla
+    );
+
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        clicarFora
+      );
+
+      document.removeEventListener(
+        "keydown",
+        pressionarTecla
+      );
+    };
+  }, [
+    editalSelecionado,
+    cargoAtual,
+  ]);
+
+
+  // ==========================================================
+  // EDITAIS DO PROCESSO SELECIONADO
   // ==========================================================
 
   const editaisDoProcesso =
@@ -163,6 +317,7 @@ export function FiltrosLista({
       ) {
         return editais;
       }
+
 
       return editais.filter(
         (item) =>
@@ -176,7 +331,7 @@ export function FiltrosLista({
 
 
   // ==========================================================
-  // PESQUISA DE EDITAL
+  // PESQUISAR EDITAL
   // ==========================================================
 
   const editaisPesquisados =
@@ -188,9 +343,11 @@ export function FiltrosLista({
             "pt-BR"
           );
 
+
       if (!termo) {
         return editaisDoProcesso;
       }
+
 
       return editaisDoProcesso.filter(
         (item) =>
@@ -209,7 +366,7 @@ export function FiltrosLista({
 
 
   // ==========================================================
-  // PESQUISA DE CARGO
+  // PESQUISAR CARGO
   // ==========================================================
 
   const cargosPesquisados =
@@ -221,9 +378,11 @@ export function FiltrosLista({
             "pt-BR"
           );
 
+
       if (!termo) {
         return cargos;
       }
+
 
       return cargos.filter(
         (cargo) =>
@@ -242,7 +401,7 @@ export function FiltrosLista({
 
 
   // ==========================================================
-  // ALTERAR URL
+  // ALTERAR FILTROS NA URL
   // ==========================================================
 
   function navegar(
@@ -255,6 +414,7 @@ export function FiltrosLista({
       new URLSearchParams(
         searchParams.toString()
       );
+
 
     Object.entries(
       alteracoes
@@ -276,18 +436,55 @@ export function FiltrosLista({
       }
     );
 
+
+    // Sempre volta para página 1
+    // quando um filtro muda.
     parametros.delete(
       "pagina"
     );
 
+
     const query =
       parametros.toString();
+
 
     router.push(
       query
         ? `${pathname}?${query}`
         : pathname
     );
+  }
+
+
+  // ==========================================================
+  // PROCESSO SELETIVO
+  // ==========================================================
+
+  function alterarProcesso(
+    processo: string
+  ) {
+    setBuscaEdital("");
+    setBuscaCargo("");
+
+    setMostrarEditais(
+      false
+    );
+
+    setMostrarCargos(
+      false
+    );
+
+
+    navegar({
+      processo:
+        processo || null,
+
+      edital:
+        null,
+
+      cargo:
+        null,
+    });
   }
 
 
@@ -308,9 +505,41 @@ export function FiltrosLista({
       false
     );
 
+    setMostrarCargos(
+      false
+    );
+
+
     navegar({
       edital:
         edital.id,
+
+      cargo:
+        null,
+    });
+  }
+
+
+  // ==========================================================
+  // LIMPAR EDITAL
+  // ==========================================================
+
+  function limparEdital() {
+    setBuscaEdital("");
+    setBuscaCargo("");
+
+    setMostrarEditais(
+      false
+    );
+
+    setMostrarCargos(
+      false
+    );
+
+
+    navegar({
+      edital:
+        null,
 
       cargo:
         null,
@@ -333,6 +562,7 @@ export function FiltrosLista({
       false
     );
 
+
     navegar({
       cargo,
     });
@@ -340,10 +570,29 @@ export function FiltrosLista({
 
 
   // ==========================================================
-  // LIMPAR
+  // LIMPAR CARGO
   // ==========================================================
 
-  function limpar() {
+  function limparCargo() {
+    setBuscaCargo("");
+
+    setMostrarCargos(
+      false
+    );
+
+
+    navegar({
+      cargo:
+        null,
+    });
+  }
+
+
+  // ==========================================================
+  // LIMPAR TODOS OS FILTROS
+  // ==========================================================
+
+  function limparTudo() {
     setBuscaEdital("");
     setBuscaCargo("");
 
@@ -355,23 +604,31 @@ export function FiltrosLista({
       false
     );
 
+
     router.push(
       pathname
     );
   }
 
 
+  // ==========================================================
+  // INTERFACE
+  // ==========================================================
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 
-        {/* PROCESSO */}
+        {/* ====================================================
+            PROCESSO SELETIVO
+        ==================================================== */}
 
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Processo seletivo
           </label>
+
 
           <select
             value={
@@ -379,28 +636,17 @@ export function FiltrosLista({
             }
             onChange={(
               event
-            ) => {
-              setBuscaEdital("");
-              setBuscaCargo("");
-
-              navegar({
-                processo:
-                  event.target
-                    .value ||
-                  null,
-
-                edital:
-                  null,
-
-                cargo:
-                  null,
-              });
-            }}
+            ) =>
+              alterarProcesso(
+                event.target.value
+              )
+            }
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
           >
             <option value="">
               Todos
             </option>
+
 
             {processos.map(
               (processo) => (
@@ -416,16 +662,25 @@ export function FiltrosLista({
                 </option>
               )
             )}
+
           </select>
         </div>
 
 
-        {/* EDITAL */}
+        {/* ====================================================
+            EDITAL PESQUISÁVEL
+        ==================================================== */}
 
-        <div className="relative">
+        <div
+          ref={
+            editalRef
+          }
+          className="relative"
+        >
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Edital
           </label>
+
 
           <div className="relative">
 
@@ -434,11 +689,15 @@ export function FiltrosLista({
               value={
                 buscaEdital
               }
-              onFocus={() =>
+              onFocus={() => {
                 setMostrarEditais(
                   true
-                )
-              }
+                );
+
+                setMostrarCargos(
+                  false
+                );
+              }}
               onChange={(
                 event
               ) => {
@@ -449,10 +708,17 @@ export function FiltrosLista({
                 setMostrarEditais(
                   true
                 );
+
+                setMostrarCargos(
+                  false
+                );
               }}
               placeholder="Pesquisar edital..."
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-9 text-sm"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm"
             />
+
+
+            {/* LUPA */}
 
             <svg
               viewBox="0 0 24 24"
@@ -473,8 +739,27 @@ export function FiltrosLista({
           </div>
 
 
+          {/* LISTA DE EDITAIS */}
+
           {mostrarEditais && (
-            <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            <div className="absolute z-40 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+
+              {/* TODOS */}
+
+              <button
+                type="button"
+                onMouseDown={(
+                  event
+                ) => {
+                  event.preventDefault();
+
+                  limparEdital();
+                }}
+                className="block w-full border-b border-slate-100 px-3 py-2.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Todos os editais
+              </button>
+
 
               {editaisPesquisados.length ===
               0 ? (
@@ -506,11 +791,13 @@ export function FiltrosLista({
                         }
                       </span>
 
+
                       {!edital.status_edital && (
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                           Inativo
                         </span>
                       )}
+
                     </button>
                   )
                 )
@@ -518,15 +805,24 @@ export function FiltrosLista({
 
             </div>
           )}
+
         </div>
 
 
-        {/* CARGO */}
+        {/* ====================================================
+            CARGO PESQUISÁVEL
+        ==================================================== */}
 
-        <div className="relative">
+        <div
+          ref={
+            cargoRef
+          }
+          className="relative"
+        >
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Cargo
           </label>
+
 
           <div className="relative">
 
@@ -538,11 +834,15 @@ export function FiltrosLista({
               disabled={
                 !editalAtual
               }
-              onFocus={() =>
+              onFocus={() => {
                 setMostrarCargos(
                   true
-                )
-              }
+                );
+
+                setMostrarEditais(
+                  false
+                );
+              }}
               onChange={(
                 event
               ) => {
@@ -553,14 +853,21 @@ export function FiltrosLista({
                 setMostrarCargos(
                   true
                 );
+
+                setMostrarEditais(
+                  false
+                );
               }}
               placeholder={
                 editalAtual
                   ? "Pesquisar cargo..."
                   : "Selecione um edital"
               }
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-9 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm disabled:cursor-not-allowed disabled:bg-slate-100"
             />
+
+
+            {/* LUPA */}
 
             <svg
               viewBox="0 0 24 24"
@@ -581,9 +888,28 @@ export function FiltrosLista({
           </div>
 
 
+          {/* LISTA DE CARGOS */}
+
           {mostrarCargos &&
             editalAtual && (
-            <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+            <div className="absolute z-40 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+
+              {/* TODOS */}
+
+              <button
+                type="button"
+                onMouseDown={(
+                  event
+                ) => {
+                  event.preventDefault();
+
+                  limparCargo();
+                }}
+                className="block w-full border-b border-slate-100 px-3 py-2.5 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Todos os cargos
+              </button>
+
 
               {cargosPesquisados.length ===
               0 ? (
@@ -623,16 +949,22 @@ export function FiltrosLista({
       </div>
 
 
+      {/* ======================================================
+          LIMPAR FILTROS
+      ====================================================== */}
+
       <div className="mt-4 flex justify-end">
+
         <button
           type="button"
           onClick={
-            limpar
+            limparTudo
           }
-          className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
         >
           Limpar filtros
         </button>
+
       </div>
 
     </div>
