@@ -1023,17 +1023,36 @@ export function NovaListaModal() {
         },
         1200
       );
-    } catch (error) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível importar a lista."
-      );
-    } finally {
-      setSalvando(
-        false
-      );
-    }
+    } catch (error: unknown) {
+  console.error(
+    "Erro ao importar lista:",
+    error
+  );
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error
+  ) {
+    setErro(
+      String(
+        (
+          error as {
+            message: unknown;
+          }
+        ).message
+      )
+    );
+  } else {
+    setErro(
+      "Não foi possível importar a lista."
+    );
+  }
+} finally {
+  setSalvando(
+    false
+  );
+}
   }
 
 
