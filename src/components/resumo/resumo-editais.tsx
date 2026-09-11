@@ -30,7 +30,7 @@ export type ResumoEdital = {
 
   total_documentacao_rejeitada: number;
 
-  total_desligamento: number;
+  
 
   total_migracao: number;
 };
@@ -229,10 +229,7 @@ export function ResumoEditais({
               item.total_documentacao_rejeitada
             ),
 
-          "Desligamento":
-  numero(
-    item.total_desligamento
-  ),
+          
 
           "Migração":
             numero(
@@ -531,9 +528,7 @@ export function ResumoEditais({
                   Doc. rejeitada
                 </th>
 
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">
-                  Desligamento
-                </th>
+             
 
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">
                   Migração
@@ -649,13 +644,7 @@ export function ResumoEditais({
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-right text-sm text-orange-700">
-                        {numero(
-                          item.total_desligamento
-                        ).toLocaleString(
-                          "pt-BR"
-                        )}
-                      </td>
+                   
 
                       <td className="px-4 py-4 text-right text-sm text-cyan-700">
                         {numero(

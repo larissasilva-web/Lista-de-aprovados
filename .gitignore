@@ -39,3 +39,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# VS Code
+.vscode/
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*
+!.env.example
+
+# Credenciais
+*.pem
+etl/**/credentials*.json
+etl/**/service-account*.json
+# VS Code
+.vscode/
+
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

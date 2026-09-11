@@ -73,11 +73,14 @@ type Candidato = {
   processo_sei:
     string | null;
 
-  matricula:
-    string | null;
+ matricula:
+  string | null;
 
-  sub_judice:
-    boolean;
+data_contratacao:
+  string | null;
+
+sub_judice:
+  boolean;
 
   origem_cadastro:
     string | null;
@@ -484,6 +487,7 @@ export default async function ListaPage({
           status,
           processo_sei,
           matricula,
+          data_contratacao,
           sub_judice,
           origem_cadastro
         `,
@@ -1018,25 +1022,28 @@ export default async function ListaPage({
                           <div className="flex items-center justify-end gap-2">
 
                             <AlterarStatusModal
-                              candidatoId={
-                                candidato.id
-                              }
-                              nome={
-                                candidato.nome
-                              }
-                              statusAtual={
-                                candidato.status
-                              }
-                              processoSeiAtual={
-                                candidato.processo_sei
-                              }
-                              matriculaAtual={
-                                candidato.matricula
-                              }
-                              editalAtivo={
-                                editalAtivo
-                              }
-                            />
+  candidatoId={
+    candidato.id
+  }
+  nome={
+    candidato.nome
+  }
+  statusAtual={
+    candidato.status
+  }
+  processoSeiAtual={
+    candidato.processo_sei
+  }
+  matriculaAtual={
+    candidato.matricula
+  }
+  dataContratacaoAtual={
+    candidato.data_contratacao
+  }
+  editalAtivo={
+    editalAtivo
+  }
+/>
 
 
                             {candidato.sub_judice && (

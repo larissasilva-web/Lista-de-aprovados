@@ -26,6 +26,9 @@ type Props = {
   matriculaAtual:
     string | null;
 
+  dataContratacaoAtual:
+    string | null;
+
   editalAtivo: boolean;
 };
 
@@ -35,7 +38,6 @@ const STATUS = [
   "Contratado",
   "Desistente",
   "Documentação Rejeitada",
-  "Desligamento",
   "Migração",
 ];
 
@@ -45,6 +47,7 @@ export function AlterarStatusModal({
   statusAtual,
   processoSeiAtual,
   matriculaAtual,
+  dataContratacaoAtual,
   editalAtivo,
 }: Props) {
   const router =
@@ -75,6 +78,14 @@ export function AlterarStatusModal({
     setMatricula,
   ] = useState(
     matriculaAtual ??
+      ""
+  );
+
+  const [
+    dataContratacao,
+    setDataContratacao,
+  ] = useState(
+    dataContratacaoAtual ??
       ""
   );
 
@@ -116,6 +127,18 @@ export function AlterarStatusModal({
       return;
     }
 
+    if (
+      status ===
+        "Contratado" &&
+      !dataContratacao
+    ) {
+      setErro(
+        "A data de contratação é obrigatória para candidatos contratados."
+      );
+
+      return;
+    }
+
     setSalvando(true);
 
     try {
@@ -138,6 +161,12 @@ export function AlterarStatusModal({
           matricula:
             matricula.trim() ||
             null,
+
+          data_contratacao:
+            status ===
+            "Contratado"
+              ? dataContratacao
+              : null,
         })
         .eq(
           "id",
@@ -183,17 +212,26 @@ export function AlterarStatusModal({
         type="button"
         onClick={() => {
           setErro("");
+
           setStatus(
             statusAtual
           );
+
           setProcessoSei(
             processoSeiAtual ??
               ""
           );
+
           setMatricula(
             matriculaAtual ??
               ""
           );
+
+          setDataContratacao(
+            dataContratacaoAtual ??
+              ""
+          );
+
           setAberto(true);
         }}
         className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -347,6 +385,40 @@ export function AlterarStatusModal({
                     </p>
                   )}
                 </div>
+
+                {status ===
+                  "Contratado" && (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Data de contratação *
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        dataContratacao
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setDataContratacao(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      disabled={
+                        salvando
+                      }
+                      required
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                    />
+
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Informe a data efetiva de contratação do candidato para este cargo.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-7 flex justify-end gap-3">
