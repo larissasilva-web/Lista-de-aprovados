@@ -12,8 +12,6 @@ import {
 
 import Papa from "papaparse";
 
-import * as XLSX from "xlsx";
-
 import {
   createClient,
 } from "@/lib/supabase/client";
@@ -31,6 +29,7 @@ const PROCESSOS_SELETIVOS = [
 
 
 const COLUNAS_ESPERADAS = [
+  "codigo_vaga",
   "cargo",
   "classificacao",
   "nota",
@@ -39,7 +38,8 @@ const COLUNAS_ESPERADAS = [
 ];
 
 
-type LinhaCSV = {
+type LinhaImportacao = {
+  codigo_vaga: string;
   cargo: string;
   classificacao: string;
   nota: string;
@@ -48,23 +48,90 @@ type LinhaCSV = {
 };
 
 
+// ============================================================
+// TEXTO
+// ============================================================
+
+function limparTexto(
+  valor: unknown
+) {
+  return String(
+    valor ?? ""
+  )
+    .trim()
+    .replace(
+      /^["']+|["']+$/g,
+      ""
+    )
+    .trim();
+}
+
+
+// ============================================================
+// CABEÇALHO
+// ============================================================
+
 function normalizarCabecalho(
   texto: string
 ) {
-  return String(texto ?? "")
-    .replace(
-      /^\uFEFF/,
-      ""
+  let resultado =
+    String(
+      texto ?? ""
     )
-    .trim()
-    .normalize("NFD")
-    .replace(
-      /[\u0300-\u036f]/g,
-      ""
-    )
-    .toLowerCase();
+      .replace(
+        /^\uFEFF/,
+        ""
+      )
+      .trim()
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]+/g,
+        "_"
+      )
+      .replace(
+        /^_+|_+$/g,
+        "" 
+      );
+
+
+  // ----------------------------------------------------------
+  // ALGUNS NOMES ALTERNATIVOS ACEITOS
+  // ----------------------------------------------------------
+
+  if (
+    resultado ===
+      "codigo_da_vaga" ||
+    resultado ===
+      "cod_vaga" ||
+    resultado ===
+      "cod_da_vaga"
+  ) {
+    resultado =
+      "codigo_vaga";
+  }
+
+
+  if (
+    resultado ===
+    "modalidade_de_candidatura"
+  ) {
+    resultado =
+      "modalidade";
+  }
+
+
+  return resultado;
 }
 
+
+// ============================================================
+// PRAZO
+// ============================================================
 
 function formatarPrazoValidade(
   anos: number,
@@ -72,6 +139,7 @@ function formatarPrazoValidade(
 ) {
   const partes:
     string[] = [];
+
 
   if (anos > 0) {
     partes.push(
@@ -83,6 +151,7 @@ function formatarPrazoValidade(
     );
   }
 
+
   if (meses > 0) {
     partes.push(
       `${meses} ${
@@ -93,11 +162,16 @@ function formatarPrazoValidade(
     );
   }
 
+
   return partes.join(
     " e "
   );
 }
 
+
+// ============================================================
+// VALIDAÇÃO DE CABEÇALHOS
+// ============================================================
 
 function validarCabecalhos(
   cabecalhos: string[]
@@ -119,46 +193,55 @@ function validarCabecalhos(
 }
 
 
+// ============================================================
+// NORMALIZAR LINHA
+// ============================================================
+
 function normalizarLinha(
   linha:
     Record<string, unknown>
-): LinhaCSV {
+): LinhaImportacao {
   return {
+    codigo_vaga:
+      limparTexto(
+        linha.codigo_vaga
+      ),
+
     cargo:
-      String(
-        linha.cargo ??
-          ""
-      ).trim(),
+      limparTexto(
+        linha.cargo
+      ),
 
     classificacao:
-      String(
-        linha.classificacao ??
-          ""
-      ).trim(),
+      limparTexto(
+        linha.classificacao
+      ),
 
     nota:
-      String(
-        linha.nota ??
-          ""
-      ).trim(),
+      limparTexto(
+        linha.nota
+      ),
 
     nome:
-      String(
-        linha.nome ??
-          ""
-      ).trim(),
+      limparTexto(
+        linha.nome
+      ),
 
     modalidade:
-      String(
-        linha.modalidade ??
-          ""
-      ).trim(),
+      limparTexto(
+        linha.modalidade
+      ),
   };
 }
 
 
+// ============================================================
+// VALIDAR CONTEÚDO
+// ============================================================
+
 function validarLinhas(
-  linhas: LinhaCSV[]
+  linhas:
+    LinhaImportacao[]
 ) {
   if (
     linhas.length === 0
@@ -166,71 +249,155 @@ function validarLinhas(
     return "O arquivo não possui candidatos.";
   }
 
-  const indiceInvalido =
-    linhas.findIndex(
-      (linha) =>
-        !linha.cargo ||
-        !linha.classificacao ||
-        !linha.nota ||
-        !linha.nome ||
-        !linha.modalidade
-    );
 
-  if (
-    indiceInvalido !== -1
+  for (
+    let indice = 0;
+    indice <
+    linhas.length;
+    indice++
   ) {
-    return `A linha ${
-      indiceInvalido + 2
-    } possui campo obrigatório vazio.`;
+    const linha =
+      linhas[indice];
+
+    // A linha 1 é o cabeçalho.
+    const numeroLinha =
+      indice + 2;
+
+
+    if (
+      !linha.codigo_vaga
+    ) {
+      return `Linha ${numeroLinha}: código da vaga não informado.`;
+    }
+
+
+    if (
+      !linha.cargo
+    ) {
+      return `Linha ${numeroLinha}: cargo não informado.`;
+    }
+
+
+    if (
+      !linha.classificacao
+    ) {
+      return `Linha ${numeroLinha}: classificação não informada.`;
+    }
+
+
+    if (
+      !/^[0-9]+$/.test(
+        linha.classificacao
+      ) ||
+      Number(
+        linha.classificacao
+      ) <= 0
+    ) {
+      return `Linha ${numeroLinha}: classificação inválida.`;
+    }
+
+
+    if (
+      !linha.nota
+    ) {
+      return `Linha ${numeroLinha}: nota não informada.`;
+    }
+
+
+    const nota =
+      Number(
+        linha.nota.replace(
+          ",",
+          "."
+        )
+      );
+
+
+    if (
+      !Number.isFinite(
+        nota
+      ) ||
+      nota < 0
+    ) {
+      return `Linha ${numeroLinha}: nota inválida.`;
+    }
+
+
+    if (
+      !linha.nome
+    ) {
+      return `Linha ${numeroLinha}: nome não informado.`;
+    }
+
+
+    if (
+      !linha.modalidade
+    ) {
+      return `Linha ${numeroLinha}: modalidade não informada.`;
+    }
   }
+
 
   return null;
 }
 
 
+// ============================================================
+// COMPONENTE
+// ============================================================
+
 export function NovaListaModal() {
   const router =
     useRouter();
+
 
   const [
     aberto,
     setAberto,
   ] = useState(false);
 
+
   const [
     processoSeletivo,
     setProcessoSeletivo,
   ] = useState("");
+
 
   const [
     edital,
     setEdital,
   ] = useState("");
 
+
   const [
     dataInicio,
     setDataInicio,
   ] = useState("");
+
 
   const [
     dataFim,
     setDataFim,
   ] = useState("");
 
+
   const [
     prazoAnos,
     setPrazoAnos,
   ] = useState(0);
+
 
   const [
     prazoMeses,
     setPrazoMeses,
   ] = useState(0);
 
+
   const [
     prorrogavel,
     setProrrogavel,
   ] = useState(false);
+
 
   const [
     arquivo,
@@ -239,12 +406,14 @@ export function NovaListaModal() {
     File | null
   >(null);
 
+
   const [
     candidatos,
     setCandidatos,
   ] = useState<
-    LinhaCSV[]
+    LinhaImportacao[]
   >([]);
+
 
   const [
     colunas,
@@ -253,20 +422,30 @@ export function NovaListaModal() {
     string[]
   >([]);
 
+
   const [
     processandoArquivo,
     setProcessandoArquivo,
   ] = useState(false);
+
 
   const [
     salvando,
     setSalvando,
   ] = useState(false);
 
+
+  const [
+    baixandoModelo,
+    setBaixandoModelo,
+  ] = useState(false);
+
+
   const [
     erro,
     setErro,
   ] = useState("");
+
 
   const [
     sucesso,
@@ -275,155 +454,205 @@ export function NovaListaModal() {
 
 
   // ==========================================================
-  // MODELO XLSX
+  // BAIXAR MODELO XLSX
   // ==========================================================
 
-  function baixarModelo() {
-    const planilhaLista =
-      XLSX.utils.aoa_to_sheet([
-        [
-          "cargo",
-          "classificacao",
-          "nota",
-          "nome",
-          "modalidade",
-        ],
-      ]);
-
-
-    planilhaLista[
-      "!cols"
-    ] = [
-      {
-        wch: 32,
-      },
-      {
-        wch: 16,
-      },
-      {
-        wch: 14,
-      },
-      {
-        wch: 40,
-      },
-      {
-        wch: 28,
-      },
-    ];
-
-
-    const planilhaInstrucoes =
-      XLSX.utils.aoa_to_sheet([
-        [
-          "Campo",
-          "Obrigatório",
-          "Exemplo",
-          "Orientação",
-        ],
-
-        [
-          "cargo",
-          "Sim",
-          "ENFERMEIRO",
-          "Cargo do candidato conforme a lista de aprovados.",
-        ],
-
-        [
-          "classificacao",
-          "Sim",
-          "1",
-          "Informe somente número inteiro positivo.",
-        ],
-
-        [
-          "nota",
-          "Sim",
-          "95,50",
-          "Pode utilizar vírgula ou ponto como separador decimal.",
-        ],
-
-        [
-          "nome",
-          "Sim",
-          "MARIA DA SILVA",
-          "Nome completo do candidato.",
-        ],
-
-        [
-          "modalidade",
-          "Sim",
-          "Ampla Concorrência",
-          "Modalidade de concorrência/candidatura do candidato.",
-        ],
-
-        [],
-
-        [
-          "IMPORTANTE",
-          "",
-          "",
-          "Não altere os nomes nem a ordem das colunas da aba Lista de Aprovados.",
-        ],
-
-        [
-          "IMPORTANTE",
-          "",
-          "",
-          "O sistema utiliza somente a primeira aba do arquivo para realizar a importação.",
-        ],
-      ]);
-
-
-    planilhaInstrucoes[
-      "!cols"
-    ] = [
-      {
-        wch: 20,
-      },
-      {
-        wch: 14,
-      },
-      {
-        wch: 28,
-      },
-      {
-        wch: 70,
-      },
-    ];
-
-
-    const workbook =
-      XLSX.utils.book_new();
-
-
-    XLSX.utils.book_append_sheet(
-      workbook,
-      planilhaLista,
-      "Lista de Aprovados"
+  async function baixarModelo() {
+    setErro("");
+    setBaixandoModelo(
+      true
     );
 
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      planilhaInstrucoes,
-      "Instruções"
-    );
+    try {
+      /*
+       * XLSX é carregado somente quando necessário.
+       * Isso evita aumentar o carregamento inicial da página.
+       */
+      const XLSX =
+        await import(
+          "xlsx"
+        );
 
 
-    XLSX.writeFile(
-      workbook,
-      "modelo-importacao-lista-aprovados.xlsx"
-    );
+      const planilhaLista =
+        XLSX.utils.aoa_to_sheet([
+          [
+            "codigo_vaga",
+            "cargo",
+            "classificacao",
+            "nota",
+            "nome",
+            "modalidade",
+          ],
+        ]);
+
+
+      planilhaLista[
+        "!cols"
+      ] = [
+        {
+          wch: 20,
+        },
+        {
+          wch: 45,
+        },
+        {
+          wch: 16,
+        },
+        {
+          wch: 14,
+        },
+        {
+          wch: 42,
+        },
+        {
+          wch: 30,
+        },
+      ];
+
+
+      const planilhaInstrucoes =
+        XLSX.utils.aoa_to_sheet([
+          [
+            "Campo",
+            "Obrigatório",
+            "Exemplo",
+            "Orientação",
+          ],
+
+          [
+            "codigo_vaga",
+            "Sim",
+            "VG-001",
+            "Código que identifica a vaga. Pode se repetir para vários candidatos.",
+          ],
+
+          [
+            "cargo",
+            "Sim",
+            "ENFERMEIRO",
+            "Nome do cargo conforme o edital.",
+          ],
+
+          [
+            "classificacao",
+            "Sim",
+            "1",
+            "Informe somente número inteiro positivo.",
+          ],
+
+          [
+            "nota",
+            "Sim",
+            "95,50",
+            "Pode utilizar vírgula ou ponto como separador decimal.",
+          ],
+
+          [
+            "nome",
+            "Sim",
+            "MARIA DA SILVA",
+            "Nome completo do candidato.",
+          ],
+
+          [
+            "modalidade",
+            "Sim",
+            "Ampla Concorrência",
+            "Modalidade de concorrência/candidatura.",
+          ],
+
+          [],
+
+          [
+            "IMPORTANTE",
+            "",
+            "",
+            "Não altere os nomes nem a ordem das colunas da aba Lista de Aprovados.",
+          ],
+
+          [
+            "IMPORTANTE",
+            "",
+            "",
+            "A importação utiliza somente a primeira aba do arquivo.",
+          ],
+
+          [
+            "IMPORTANTE",
+            "",
+            "",
+            "O código da vaga é tratado como texto. Se possuir zeros à esquerda, configure a célula como Texto no Excel.",
+          ],
+        ]);
+
+
+      planilhaInstrucoes[
+        "!cols"
+      ] = [
+        {
+          wch: 20,
+        },
+        {
+          wch: 14,
+        },
+        {
+          wch: 30,
+        },
+        {
+          wch: 80,
+        },
+      ];
+
+
+      const workbook =
+        XLSX.utils.book_new();
+
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        planilhaLista,
+        "Lista de Aprovados"
+      );
+
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        planilhaInstrucoes,
+        "Instruções"
+      );
+
+
+      XLSX.writeFile(
+        workbook,
+        "modelo-importacao-lista-aprovados.xlsx"
+      );
+
+    } catch (error) {
+      console.error(
+        error
+      );
+
+      setErro(
+        "Não foi possível gerar o modelo XLSX."
+      );
+    } finally {
+      setBaixandoModelo(
+        false
+      );
+    }
   }
 
 
   // ==========================================================
-  // LIMPEZA
+  // LIMPAR FORMULÁRIO
   // ==========================================================
 
   function limparFormulario() {
     setProcessoSeletivo("");
     setEdital("");
+
     setDataInicio("");
     setDataFim("");
 
@@ -448,25 +677,33 @@ export function NovaListaModal() {
       return;
     }
 
-    setAberto(false);
+
+    setAberto(
+      false
+    );
 
     limparFormulario();
   }
 
 
   // ==========================================================
-  // CSV
+  // PROCESSAR CSV
   // ==========================================================
 
   function processarCSV(
-    arquivoSelecionado: File
+    arquivoSelecionado:
+      File
   ) {
     Papa.parse<
-      Record<string, unknown>
+      Record<
+        string,
+        unknown
+      >
     >(
       arquivoSelecionado,
       {
-        header: true,
+        header:
+          true,
 
         skipEmptyLines:
           "greedy",
@@ -474,92 +711,126 @@ export function NovaListaModal() {
         transformHeader:
           normalizarCabecalho,
 
+
         complete:
-          (resultado) => {
-            if (
-              resultado.errors
-                .length > 0
-            ) {
-              throw new Error(
-                `Erro ao ler o CSV: ${
-                  resultado
-                    .errors[0]
-                    .message
-                }`
-              );
-            }
+          (
+            resultado
+          ) => {
+            try {
+              if (
+                resultado.errors
+                  .length >
+                0
+              ) {
+                throw new Error(
+                  `Erro ao ler o CSV: ${
+                    resultado
+                      .errors[0]
+                      .message
+                  }`
+                );
+              }
 
 
-            const cabecalhos =
-              (
-                resultado.meta
-                  .fields ??
-                []
-              ).map(
-                normalizarCabecalho
-              );
-
-
-            if (
-              !validarCabecalhos(
-                cabecalhos
-              )
-            ) {
-              throw new Error(
-                "O arquivo deve possuir exatamente as colunas, nesta ordem: cargo, classificacao, nota, nome, modalidade."
-              );
-            }
-
-
-            const linhas =
-              resultado.data
-                .map(
-                  normalizarLinha
-                )
-                .filter(
-                  (linha) =>
-                    linha.cargo ||
-                    linha.classificacao ||
-                    linha.nota ||
-                    linha.nome ||
-                    linha.modalidade
+              const cabecalhos =
+                (
+                  resultado.meta
+                    .fields ??
+                  []
+                ).map(
+                  normalizarCabecalho
                 );
 
 
-            const erroLinhas =
-              validarLinhas(
+              if (
+                !validarCabecalhos(
+                  cabecalhos
+                )
+              ) {
+                throw new Error(
+                  "O arquivo deve possuir exatamente, nesta ordem: codigo_vaga, cargo, classificacao, nota, nome, modalidade."
+                );
+              }
+
+
+              const linhas =
+                resultado.data
+                  .map(
+                    normalizarLinha
+                  )
+                  .filter(
+                    (
+                      linha
+                    ) =>
+                      linha.codigo_vaga ||
+                      linha.cargo ||
+                      linha.classificacao ||
+                      linha.nota ||
+                      linha.nome ||
+                      linha.modalidade
+                  );
+
+
+              const erroLinhas =
+                validarLinhas(
+                  linhas
+                );
+
+
+              if (
+                erroLinhas
+              ) {
+                throw new Error(
+                  erroLinhas
+                );
+              }
+
+
+              setColunas(
+                cabecalhos
+              );
+
+              setCandidatos(
                 linhas
               );
 
+              setArquivo(
+                arquivoSelecionado
+              );
 
-            if (
-              erroLinhas
-            ) {
-              throw new Error(
-                erroLinhas
+            } catch (error) {
+              setArquivo(
+                null
+              );
+
+              setCandidatos(
+                []
+              );
+
+              setColunas(
+                []
+              );
+
+
+              setErro(
+                error instanceof
+                Error
+                  ? error.message
+                  : "Não foi possível processar o CSV."
+              );
+
+            } finally {
+              setProcessandoArquivo(
+                false
               );
             }
-
-
-            setColunas(
-              cabecalhos
-            );
-
-            setCandidatos(
-              linhas
-            );
-
-            setArquivo(
-              arquivoSelecionado
-            );
-
-            setProcessandoArquivo(
-              false
-            );
           },
 
+
         error:
-          (erroPapa) => {
+          (
+            erroPapa
+          ) => {
             setProcessandoArquivo(
               false
             );
@@ -574,12 +845,19 @@ export function NovaListaModal() {
 
 
   // ==========================================================
-  // XLSX
+  // PROCESSAR XLSX
   // ==========================================================
 
   async function processarXLSX(
-    arquivoSelecionado: File
+    arquivoSelecionado:
+      File
   ) {
+    const XLSX =
+      await import(
+        "xlsx"
+      );
+
+
     const buffer =
       await arquivoSelecionado.arrayBuffer();
 
@@ -595,8 +873,8 @@ export function NovaListaModal() {
 
 
     if (
-      workbook.SheetNames.length ===
-      0
+      workbook.SheetNames
+        .length === 0
     ) {
       throw new Error(
         "O arquivo XLSX não possui nenhuma aba."
@@ -604,13 +882,15 @@ export function NovaListaModal() {
     }
 
 
-    const primeiraAba =
-      workbook.SheetNames[0];
+    const nomePrimeiraAba =
+      workbook.SheetNames[
+        0
+      ];
 
 
     const worksheet =
       workbook.Sheets[
-        primeiraAba
+        nomePrimeiraAba
       ];
 
 
@@ -620,36 +900,60 @@ export function NovaListaModal() {
       >(
         worksheet,
         {
-          header: 1,
+          header:
+            1,
 
-          defval: "",
+          defval:
+            "",
 
-          raw: true,
+          raw:
+            true,
         }
-      );
+      ) as unknown[][];
 
 
     if (
-      matriz.length === 0
+      matriz.length ===
+      0
     ) {
       throw new Error(
-        "A primeira aba do arquivo está vazia."
+        "A primeira aba está vazia."
       );
     }
 
 
+    const primeiraLinha =
+      matriz[0] ?? [];
+
+
     const cabecalhos =
-      (
-        matriz[0] ??
-        []
-      ).map(
-        (valor) =>
+      primeiraLinha.map(
+        (
+          valor
+        ) =>
           normalizarCabecalho(
             String(
-              valor ?? ""
+              valor ??
+                ""
             )
           )
       );
+
+
+    /*
+     * Remove apenas colunas vazias que possam existir
+     * depois do último cabeçalho real.
+     */
+    while (
+      cabecalhos.length >
+        0 &&
+      !cabecalhos[
+        cabecalhos.length -
+          1
+      ]
+    ) {
+      cabecalhos.pop();
+    }
 
 
     if (
@@ -658,7 +962,7 @@ export function NovaListaModal() {
       )
     ) {
       throw new Error(
-        "A primeira aba deve possuir exatamente as colunas, nesta ordem: cargo, classificacao, nota, nome, modalidade."
+        "A primeira aba deve possuir exatamente, nesta ordem: codigo_vaga, cargo, classificacao, nota, nome, modalidade."
       );
     }
 
@@ -667,7 +971,9 @@ export function NovaListaModal() {
       matriz
         .slice(1)
         .map(
-          (linha) => {
+          (
+            linha
+          ) => {
             const valores =
               Array.isArray(
                 linha
@@ -675,28 +981,35 @@ export function NovaListaModal() {
                 ? linha
                 : [];
 
+
             return normalizarLinha(
               {
-                cargo:
+                codigo_vaga:
                   valores[0],
 
-                classificacao:
+                cargo:
                   valores[1],
 
-                nota:
+                classificacao:
                   valores[2],
 
-                nome:
+                nota:
                   valores[3],
 
-                modalidade:
+                nome:
                   valores[4],
+
+                modalidade:
+                  valores[5],
               }
             );
           }
         )
         .filter(
-          (linha) =>
+          (
+            linha
+          ) =>
+            linha.codigo_vaga ||
             linha.cargo ||
             linha.classificacao ||
             linha.nota ||
@@ -735,7 +1048,7 @@ export function NovaListaModal() {
 
 
   // ==========================================================
-  // SELEÇÃO DO ARQUIVO
+  // SELECIONAR ARQUIVO
   // ==========================================================
 
   async function selecionarArquivo(
@@ -751,12 +1064,36 @@ export function NovaListaModal() {
 
 
     const arquivoSelecionado =
-      event.target.files?.[0];
+      event.target.files?.[
+        0
+      ];
 
 
     if (
       !arquivoSelecionado
     ) {
+      return;
+    }
+
+
+    // 10 MB
+    const limite =
+      10 *
+      1024 *
+      1024;
+
+
+    if (
+      arquivoSelecionado.size >
+      limite
+    ) {
+      setErro(
+        "O arquivo deve possuir no máximo 10 MB."
+      );
+
+      event.target.value =
+        "";
+
       return;
     }
 
@@ -815,17 +1152,28 @@ export function NovaListaModal() {
       processarCSV(
         arquivoSelecionado
       );
+
     } catch (error) {
       setProcessandoArquivo(
         false
       );
 
-      setArquivo(null);
-      setCandidatos([]);
-      setColunas([]);
+      setArquivo(
+        null
+      );
+
+      setCandidatos(
+        []
+      );
+
+      setColunas(
+        []
+      );
+
 
       setErro(
-        error instanceof Error
+        error instanceof
+        Error
           ? error.message
           : "Não foi possível processar o arquivo."
       );
@@ -834,7 +1182,7 @@ export function NovaListaModal() {
 
 
   // ==========================================================
-  // IMPORTAÇÃO
+  // IMPORTAR
   // ==========================================================
 
   async function importar(
@@ -872,7 +1220,8 @@ export function NovaListaModal() {
     if (
       dataInicio &&
       dataFim &&
-      dataFim < dataInicio
+      dataFim <
+        dataInicio
     ) {
       setErro(
         "A data final não pode ser anterior à data inicial."
@@ -943,7 +1292,7 @@ export function NovaListaModal() {
         error,
       } =
         await supabase.rpc(
-          "importar_lista_csv_v2",
+          "importar_lista_aprovados",
           {
             p_processo_seletivo:
               processoSeletivo,
@@ -975,7 +1324,14 @@ export function NovaListaModal() {
 
 
       if (error) {
-        throw error;
+        console.error(
+          "Erro Supabase:",
+          error
+        );
+
+        throw new Error(
+          error.message
+        );
       }
 
 
@@ -1023,36 +1379,26 @@ export function NovaListaModal() {
         },
         1200
       );
-    } catch (error: unknown) {
-  console.error(
-    "Erro ao importar lista:",
-    error
-  );
 
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error
-  ) {
-    setErro(
-      String(
-        (
-          error as {
-            message: unknown;
-          }
-        ).message
-      )
-    );
-  } else {
-    setErro(
-      "Não foi possível importar a lista."
-    );
-  }
-} finally {
-  setSalvando(
-    false
-  );
-}
+    } catch (error) {
+      console.error(
+        "Erro ao importar lista:",
+        error
+      );
+
+
+      setErro(
+        error instanceof
+        Error
+          ? error.message
+          : "Não foi possível importar a lista."
+      );
+
+    } finally {
+      setSalvando(
+        false
+      );
+    }
   }
 
 
@@ -1079,11 +1425,14 @@ export function NovaListaModal() {
 
 
       {aberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
 
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
 
-            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+            {/* CABEÇALHO */}
+
+            <div className="flex shrink-0 items-start justify-between border-b border-slate-200 px-6 py-5">
+
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
                   Nova lista de aprovados
@@ -1093,6 +1442,7 @@ export function NovaListaModal() {
                   Cadastre o edital e importe a lista de candidatos.
                 </p>
               </div>
+
 
               <button
                 type="button"
@@ -1107,6 +1457,7 @@ export function NovaListaModal() {
               >
                 ×
               </button>
+
             </div>
 
 
@@ -1114,343 +1465,481 @@ export function NovaListaModal() {
               onSubmit={
                 importar
               }
-              className="p-6"
+              className="flex min-h-0 flex-1 flex-col"
             >
 
-              {erro && (
-                <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {erro}
-                </div>
-              )}
+              {/* CONTEÚDO COM SCROLL */}
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+
+                {erro && (
+                  <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {erro}
+                  </div>
+                )}
 
 
-              {sucesso && (
-                <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  {sucesso}
-                </div>
-              )}
+                {sucesso && (
+                  <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    {sucesso}
+                  </div>
+                )}
 
 
-              <div className="space-y-5">
+                <div className="space-y-5">
 
-                {/* PROCESSO */}
+                  {/* PROCESSO */}
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Processo seletivo *
-                  </label>
-
-                  <select
-                    required
-                    value={
-                      processoSeletivo
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setProcessoSeletivo(
-                        event.target.value
-                      )
-                    }
-                    disabled={
-                      salvando
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
-                  >
-                    <option value="">
-                      Selecione
-                    </option>
-
-                    {PROCESSOS_SELETIVOS.map(
-                      (
-                        processo
-                      ) => (
-                        <option
-                          key={
-                            processo
-                          }
-                          value={
-                            processo
-                          }
-                        >
-                          {processo}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
-
-
-                {/* EDITAL */}
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Edital *
-                  </label>
-
-                  <input
-                    required
-                    value={
-                      edital
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setEdital(
-                        event.target.value
-                      )
-                    }
-                    disabled={
-                      salvando
-                    }
-                    placeholder="Ex.: Edital 01/2026"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
-                  />
-                </div>
-
-
-                {/* DATAS */}
-
-                <div className="grid gap-5 sm:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Data de início
+                      Processo seletivo *
                     </label>
 
-                    <input
-                      type="date"
+                    <select
+                      required
                       value={
-                        dataInicio
+                        processoSeletivo
                       }
                       onChange={(
                         event
                       ) =>
-                        setDataInicio(
+                        setProcessoSeletivo(
                           event.target.value
                         )
                       }
                       disabled={
                         salvando
                       }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Data final
-                    </label>
-
-                    <input
-                      type="date"
-                      value={
-                        dataFim
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setDataFim(
-                          event.target.value
-                        )
-                      }
-                      disabled={
-                        salvando
-                      }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
-                    />
-                  </div>
-                </div>
-
-
-                {/* PRAZO */}
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Prazo de validade *
-                  </label>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <span className="mb-1.5 block text-xs text-slate-500">
-                        Anos
-                      </span>
-
-                      <input
-                        type="number"
-                        min={0}
-                        max={99}
-                        value={
-                          prazoAnos
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setPrazoAnos(
-                            Number(
-                              event.target.value
-                            )
-                          )
-                        }
-                        disabled={
-                          salvando
-                        }
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
-                      />
-                    </div>
-
-                    <div>
-                      <span className="mb-1.5 block text-xs text-slate-500">
-                        Meses
-                      </span>
-
-                      <input
-                        type="number"
-                        min={0}
-                        max={11}
-                        value={
-                          prazoMeses
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setPrazoMeses(
-                            Number(
-                              event.target.value
-                            )
-                          )
-                        }
-                        disabled={
-                          salvando
-                        }
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* PRORROGÁVEL */}
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Prorrogável?
-                  </label>
-
-                  <select
-                    value={
-                      prorrogavel
-                        ? "sim"
-                        : "nao"
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setProrrogavel(
-                        event.target.value ===
-                          "sim"
-                      )
-                    }
-                    disabled={
-                      salvando
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
-                  >
-                    <option value="nao">
-                      Não
-                    </option>
-
-                    <option value="sim">
-                      Sim
-                    </option>
-                  </select>
-                </div>
-
-
-                {/* ARQUIVO */}
-
-                <div>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-                    <label className="block text-sm font-medium text-slate-700">
-                      Lista de aprovados *
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={
-                        baixarModelo
-                      }
-                      className="rounded-lg border border-[#094780] px-3 py-2 text-xs font-medium text-[#094780] hover:bg-blue-50"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
                     >
-                      Baixar modelo XLSX
-                    </button>
+                      <option value="">
+                        Selecione
+                      </option>
+
+                      {PROCESSOS_SELETIVOS.map(
+                        (
+                          processo
+                        ) => (
+                          <option
+                            key={
+                              processo
+                            }
+                            value={
+                              processo
+                            }
+                          >
+                            {processo}
+                          </option>
+                        )
+                      )}
+                    </select>
                   </div>
 
 
-                  <input
-                    type="file"
-                    accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                    onChange={
-                      selecionarArquivo
-                    }
-                    disabled={
-                      salvando ||
-                      processandoArquivo
-                    }
-                    className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
+                  {/* EDITAL */}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Edital *
+                    </label>
+
+                    <input
+                      required
+                      value={
+                        edital
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setEdital(
+                          event.target.value
+                        )
+                      }
+                      disabled={
+                        salvando
+                      }
+                      placeholder="Ex.: 13/2025"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                    />
+                  </div>
 
 
-                  <p className="mt-2 text-xs text-slate-500">
-                    Formato recomendado: XLSX. Também aceitamos CSV.
-                  </p>
+                  {/* DATAS */}
 
+                  <div className="grid gap-5 sm:grid-cols-2">
 
-                  <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    <strong>
-                      Estrutura obrigatória:
-                    </strong>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Data de início
+                      </label>
 
-                    <div className="mt-2 font-mono text-xs">
-                      cargo | classificacao | nota | nome | modalidade
+                      <input
+                        type="date"
+                        value={
+                          dataInicio
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setDataInicio(
+                            event.target.value
+                          )
+                        }
+                        disabled={
+                          salvando
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                      />
                     </div>
 
-                    <p className="mt-2 text-xs">
-                      No XLSX, o sistema lê somente a primeira aba.
-                    </p>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Data final
+                      </label>
+
+                      <input
+                        type="date"
+                        value={
+                          dataFim
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setDataFim(
+                            event.target.value
+                          )
+                        }
+                        disabled={
+                          salvando
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                      />
+                    </div>
+
                   </div>
 
 
-                  {processandoArquivo && (
-                    <p className="mt-2 text-sm text-slate-500">
-                      Validando arquivo...
+                  {/* PRAZO */}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Prazo de validade *
+                    </label>
+
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+
+                      <div>
+                        <span className="mb-1.5 block text-xs text-slate-500">
+                          Anos
+                        </span>
+
+                        <input
+                          type="number"
+                          min={0}
+                          max={99}
+                          value={
+                            prazoAnos
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setPrazoAnos(
+                              Number(
+                                event.target.value
+                              )
+                            )
+                          }
+                          disabled={
+                            salvando
+                          }
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                        />
+                      </div>
+
+
+                      <div>
+                        <span className="mb-1.5 block text-xs text-slate-500">
+                          Meses
+                        </span>
+
+                        <input
+                          type="number"
+                          min={0}
+                          max={11}
+                          value={
+                            prazoMeses
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setPrazoMeses(
+                              Number(
+                                event.target.value
+                              )
+                            )
+                          }
+                          disabled={
+                            salvando
+                          }
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                        />
+                      </div>
+
+                    </div>
+                  </div>
+
+
+                  {/* PRORROGÁVEL */}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Prorrogável?
+                    </label>
+
+                    <select
+                      value={
+                        prorrogavel
+                          ? "sim"
+                          : "nao"
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setProrrogavel(
+                          event.target.value ===
+                            "sim"
+                        )
+                      }
+                      disabled={
+                        salvando
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                    >
+                      <option value="nao">
+                        Não
+                      </option>
+
+                      <option value="sim">
+                        Sim
+                      </option>
+                    </select>
+                  </div>
+
+
+                  {/* ARQUIVO */}
+
+                  <div>
+
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+
+                      <label className="block text-sm font-medium text-slate-700">
+                        Lista de aprovados *
+                      </label>
+
+
+                      <button
+                        type="button"
+                        disabled={
+                          baixandoModelo
+                        }
+                        onClick={() => {
+                          void baixarModelo();
+                        }}
+                        className="rounded-lg border border-[#094780] px-3 py-2 text-xs font-medium text-[#094780] hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {baixandoModelo
+                          ? "Gerando..."
+                          : "Baixar modelo XLSX"}
+                      </button>
+
+                    </div>
+
+
+                    <input
+                      type="file"
+                      accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                      onChange={
+                        selecionarArquivo
+                      }
+                      disabled={
+                        salvando ||
+                        processandoArquivo
+                      }
+                      className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    />
+
+
+                    <p className="mt-2 text-xs text-slate-500">
+                      Recomendado: XLSX. CSV também é aceito.
                     </p>
-                  )}
 
 
-                  {arquivo &&
-                    candidatos.length >
-                      0 && (
-                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+
                       <strong>
-                        Arquivo válido.
-                      </strong>{" "}
-                      {candidatos.length} candidato
-                      {candidatos.length ===
-                      1
-                        ? ""
-                        : "s"}{" "}
-                      encontrado
-                      {candidatos.length ===
-                      1
-                        ? ""
-                        : "s"}.
+                        Colunas obrigatórias:
+                      </strong>
+
+                      <div className="mt-2 overflow-x-auto font-mono text-xs">
+                        codigo_vaga | cargo | classificacao | nota | nome | modalidade
+                      </div>
+
                     </div>
-                  )}
+
+
+                    {processandoArquivo && (
+                      <p className="mt-3 text-sm text-slate-500">
+                        Validando arquivo...
+                      </p>
+                    )}
+
+
+                    {arquivo &&
+                      candidatos.length >
+                        0 && (
+                      <div className="mt-4">
+
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                          <strong>
+                            Arquivo válido.
+                          </strong>{" "}
+                          {candidatos.length.toLocaleString(
+                            "pt-BR"
+                          )} candidato
+                          {candidatos.length ===
+                          1
+                            ? ""
+                            : "s"}{" "}
+                          encontrado
+                          {candidatos.length ===
+                          1
+                            ? ""
+                            : "s"}.
+                        </div>
+
+
+                        {/* PRÉVIA */}
+
+                        <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+
+                          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-sm font-medium text-slate-700">
+                              Prévia das primeiras linhas
+                            </p>
+                          </div>
+
+
+                          <div className="overflow-x-auto">
+
+                            <table className="w-full min-w-[850px] text-xs">
+
+                              <thead className="bg-slate-50">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">
+                                    Código
+                                  </th>
+
+                                  <th className="px-3 py-2 text-left">
+                                    Cargo
+                                  </th>
+
+                                  <th className="px-3 py-2 text-left">
+                                    Class.
+                                  </th>
+
+                                  <th className="px-3 py-2 text-left">
+                                    Nota
+                                  </th>
+
+                                  <th className="px-3 py-2 text-left">
+                                    Nome
+                                  </th>
+
+                                  <th className="px-3 py-2 text-left">
+                                    Modalidade
+                                  </th>
+                                </tr>
+                              </thead>
+
+
+                              <tbody className="divide-y divide-slate-100">
+
+                                {candidatos
+                                  .slice(
+                                    0,
+                                    5
+                                  )
+                                  .map(
+                                    (
+                                      candidato,
+                                      indice
+                                    ) => (
+                                      <tr
+                                        key={
+                                          indice
+                                        }
+                                      >
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.codigo_vaga
+                                          }
+                                        </td>
+
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.cargo
+                                          }
+                                        </td>
+
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.classificacao
+                                          }
+                                        </td>
+
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.nota
+                                          }
+                                        </td>
+
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.nome
+                                          }
+                                        </td>
+
+                                        <td className="px-3 py-2">
+                                          {
+                                            candidato.modalidade
+                                          }
+                                        </td>
+                                      </tr>
+                                    )
+                                  )}
+
+                              </tbody>
+                            </table>
+
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+                  </div>
+
                 </div>
+
               </div>
 
 
-              <div className="mt-7 flex justify-end gap-3">
+              {/* RODAPÉ FIXO */}
+
+              <div className="flex shrink-0 justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+
                 <button
                   type="button"
                   onClick={
@@ -1465,11 +1954,13 @@ export function NovaListaModal() {
                   Cancelar
                 </button>
 
+
                 <button
                   type="submit"
                   disabled={
                     salvando ||
-                    processandoArquivo
+                    processandoArquivo ||
+                    !arquivo
                   }
                   className="rounded-lg bg-[#094780] px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1477,7 +1968,9 @@ export function NovaListaModal() {
                     ? "Importando..."
                     : "Importar lista"}
                 </button>
+
               </div>
+
             </form>
           </div>
         </div>
