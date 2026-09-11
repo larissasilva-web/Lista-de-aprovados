@@ -3,6 +3,9 @@ name: ETL Saúde Indígena
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "30 8 * * *"
+
 jobs:
   sincronizar:
     runs-on: ubuntu-latest
