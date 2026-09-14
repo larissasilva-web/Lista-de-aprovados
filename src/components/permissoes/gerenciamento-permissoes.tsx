@@ -67,6 +67,10 @@ function badgePerfil(tipo: TipoPermissao) {
     return "border-blue-200 bg-blue-50 text-blue-700";
   }
 
+  if (tipo === "gestor_edital") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
@@ -424,6 +428,7 @@ export function GerenciamentoPermissoes() {
             >
               <option value="todos">Todos os perfis</option>
               <option value="usuario">Usuário</option>
+              <option value="gestor_edital">Gestor de edital</option>
               <option value="contratador">Contratador</option>
               <option value="admin">Administrador</option>
             </select>
@@ -651,6 +656,9 @@ export function GerenciamentoPermissoes() {
                     className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold"
                   >
                     <option value="usuario">Usuário</option>
+                    <option value="gestor_edital">
+                      Gestor de edital
+                    </option>
                     <option value="contratador">Contratador</option>
                     <option value="admin">Administrador</option>
                   </select>
@@ -729,6 +737,14 @@ export function GerenciamentoPermissoes() {
                     );
                   })}
                 </div>
+
+                {form.tipo_permissao === "gestor_edital" && (
+                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700">
+                    O gestor de edital cadastra novos editais, mas não altera,
+                    inativa nem exclui editais já cadastrados. Na lista de
+                    aprovados o acesso é somente leitura.
+                  </p>
+                )}
 
                 {form.tipo_permissao === "admin" && (
                   <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs font-semibold text-violet-700">

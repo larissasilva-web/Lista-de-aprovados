@@ -11,6 +11,11 @@ import {
 } from "@/components/editais/novo-edital-modal";
 
 import {
+  podeEditarEdital,
+  podeExcluirEdital,
+} from "@/lib/acesso/modulos";
+
+import {
   exigirModulo,
 } from "@/lib/auth/usuario-atual";
 
@@ -21,6 +26,7 @@ import {
 export default async function EditaisPage() {
   const usuarioAtual =
     await exigirModulo("editais", [
+      "gestor_edital",
       "contratador",
       "admin",
     ]);
@@ -108,6 +114,13 @@ export default async function EditaisPage() {
     usuarioAtual.tipoPermissao ===
     "admin";
 
+  // O gestor de edital cadastra novos editais, mas nao altera,
+  // inativa nem exclui os que ja estao cadastrados.
+  const podeAlterarEditais =
+    podeEditarEdital(
+      usuarioAtual.tipoPermissao
+    );
+
   return (
     <section>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -123,7 +136,10 @@ export default async function EditaisPage() {
 
         <div className="flex flex-wrap gap-3">
           <NovoEditalModal />
-          <NovaListaModal />
+
+          {podeAlterarEditais && (
+            <NovaListaModal />
+          )}
         </div>
       </div>
 
@@ -131,8 +147,13 @@ export default async function EditaisPage() {
         editaisIniciais={
           editaisComIntegracao
         }
+        podeEditar={
+          podeAlterarEditais
+        }
         podeExcluir={
-          ehAdmin
+          podeExcluirEdital(
+            usuarioAtual.tipoPermissao
+          )
         }
         podeConfigurarIntegracao={
           ehAdmin

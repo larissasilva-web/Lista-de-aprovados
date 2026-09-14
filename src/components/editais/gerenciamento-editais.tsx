@@ -63,6 +63,8 @@ type Edital = {
 type Props = {
   editaisIniciais: Edital[];
 
+  podeEditar: boolean;
+
   podeExcluir: boolean;
 
   podeConfigurarIntegracao: boolean;
@@ -207,6 +209,7 @@ function extrairIdGoogle(
 
 export function GerenciamentoEditais({
   editaisIniciais,
+  podeEditar,
   podeExcluir,
   podeConfigurarIntegracao,
 }: Props) {
@@ -1086,41 +1089,52 @@ export function GerenciamentoEditais({
 
                         <td className="px-5 py-4">
                           <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={
-                                processando
-                              }
-                              onClick={() =>
-                                abrirEdicao(
-                                  edital
-                                )
-                              }
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            >
-                              Editar
-                            </button>
+                            {podeEditar && (
+                              <button
+                                type="button"
+                                disabled={
+                                  processando
+                                }
+                                onClick={() =>
+                                  abrirEdicao(
+                                    edital
+                                  )
+                                }
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                Editar
+                              </button>
+                            )}
 
-                            <button
-                              type="button"
-                              disabled={
-                                processando
-                              }
-                              onClick={() =>
-                                alterarStatus(
-                                  edital
-                                )
-                              }
-                              className={
-                                edital.status_edital
-                                  ? "rounded-lg border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                                  : "rounded-lg border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                              }
-                            >
-                              {edital.status_edital
-                                ? "Inativar"
-                                : "Ativar"}
-                            </button>
+                            {podeEditar && (
+                              <button
+                                type="button"
+                                disabled={
+                                  processando
+                                }
+                                onClick={() =>
+                                  alterarStatus(
+                                    edital
+                                  )
+                                }
+                                className={
+                                  edital.status_edital
+                                    ? "rounded-lg border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                                    : "rounded-lg border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                }
+                              >
+                                {edital.status_edital
+                                  ? "Inativar"
+                                  : "Ativar"}
+                              </button>
+                            )}
+
+                            {!podeEditar &&
+                              !podeExcluir && (
+                                <span className="text-xs text-slate-400">
+                                  Somente leitura
+                                </span>
+                              )}
 
                             {podeExcluir && (
                               <button

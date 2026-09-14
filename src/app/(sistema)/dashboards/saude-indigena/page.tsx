@@ -16,6 +16,7 @@ export default async function SaudeIndigenaPage() {
 
   await exigirModulo("dashboards", [
     "usuario",
+    "gestor_edital",
     "contratador",
     "admin",
   ]);

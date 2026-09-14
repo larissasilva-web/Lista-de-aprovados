@@ -2,13 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { TipoPermissao } from "@/lib/acesso/modulos";
 import { exigirPermissao } from "@/lib/auth/usuario-atual";
 import { createClient } from "@/lib/supabase/server";
-
-type TipoPermissao =
-  | "usuario"
-  | "contratador"
-  | "admin";
 
 type ResultadoAcao = {
   sucesso: boolean;
@@ -77,6 +73,7 @@ export async function adicionarUsuario(
   const permissoesValidas:
     TipoPermissao[] = [
       "usuario",
+      "gestor_edital",
       "contratador",
       "admin",
     ];

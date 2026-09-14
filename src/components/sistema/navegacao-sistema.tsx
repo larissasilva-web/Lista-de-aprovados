@@ -276,6 +276,7 @@ export function NavegacaoSistema({
 
       perfis: [
         "usuario",
+        "gestor_edital",
         "contratador",
         "admin",
       ],
@@ -304,6 +305,7 @@ export function NavegacaoSistema({
       modulo: "editais",
 
       perfis: [
+        "gestor_edital",
         "contratador",
         "admin",
       ],

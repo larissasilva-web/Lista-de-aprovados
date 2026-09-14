@@ -1,5 +1,6 @@
 export type TipoPermissao =
   | "usuario"
+  | "gestor_edital"
   | "contratador"
   | "admin";
 
@@ -22,6 +23,7 @@ export type ContextoAcesso = {
 
 export const ROTULO_PERMISSAO: Record<TipoPermissao, string> = {
   usuario: "Usuário",
+  gestor_edital: "Gestor de edital",
   contratador: "Contratador",
   admin: "Administrador",
 };
@@ -55,7 +57,7 @@ export function modulosPermitidosPorPerfil(
     };
   }
 
-  if (tipo === "contratador") {
+  if (tipo === "contratador" || tipo === "gestor_edital") {
     return {
       lista: true,
       dashboards: true,
@@ -106,6 +108,28 @@ export function podeOperarLista(
       (contexto.tipo_permissao === "contratador" ||
         contexto.tipo_permissao === "admin")
   );
+}
+
+// ============================================================
+// Editais: cadastrar e alterar sao privilegios distintos.
+// O gestor de edital cadastra novos editais, mas nao altera,
+// inativa nem exclui os que ja estao cadastrados.
+// ============================================================
+
+export function podeCadastrarEdital(tipo: TipoPermissao): boolean {
+  return (
+    tipo === "gestor_edital" ||
+    tipo === "contratador" ||
+    tipo === "admin"
+  );
+}
+
+export function podeEditarEdital(tipo: TipoPermissao): boolean {
+  return tipo === "contratador" || tipo === "admin";
+}
+
+export function podeExcluirEdital(tipo: TipoPermissao): boolean {
+  return tipo === "admin";
 }
 
 export function rotaInicialPorModulos(
