@@ -8,6 +8,8 @@ import {
 
 import {
   ReactNode,
+  useEffect,
+  useState,
 } from "react";
 
 import {
@@ -46,7 +48,7 @@ type Props = {
 
 type TipoIcone =
   | "lista"
-  | "resumo"
+  | "dashboard"
   | "editais"
   | "usuarios"
   | "configuracoes";
@@ -81,6 +83,7 @@ function Icone({
 
 
   switch (tipo) {
+
     case "lista":
       return base(
         <>
@@ -94,13 +97,40 @@ function Icone({
       );
 
 
-    case "resumo":
+    case "dashboard":
       return base(
         <>
-          <path d="M4 19V9" />
-          <path d="M10 19V5" />
-          <path d="M16 19v-7" />
-          <path d="M22 19H2" />
+          <rect
+            x="3"
+            y="3"
+            width="7"
+            height="7"
+            rx="1"
+          />
+
+          <rect
+            x="14"
+            y="3"
+            width="7"
+            height="7"
+            rx="1"
+          />
+
+          <rect
+            x="3"
+            y="14"
+            width="7"
+            height="7"
+            rx="1"
+          />
+
+          <rect
+            x="14"
+            y="14"
+            width="7"
+            height="7"
+            rx="1"
+          />
         </>
       );
 
@@ -124,7 +154,9 @@ function Icone({
             cy="8"
             r="4"
           />
+
           <path d="M3 21v-2a6 6 0 0 1 12 0v2" />
+
           <path d="M17 11a4 4 0 0 1 4 4v2" />
         </>
       );
@@ -138,10 +170,43 @@ function Icone({
             cy="12"
             r="3"
           />
+
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2.83 2.83-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-4v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06-2.83-2.83.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3v-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06L7.04 4.3l.06.06a1.65 1.65 0 0 0 1.82.33h.01A1.65 1.65 0 0 0 10 3.18V3h4v.18a1.65 1.65 0 0 0 1.07 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06 2.83 2.83-.06.06A1.65 1.65 0 0 0 19.4 9v.01A1.65 1.65 0 0 0 20.91 10H21v4h-.09A1.65 1.65 0 0 0 19.4 15Z" />
         </>
       );
   }
+}
+
+
+function Seta({
+  aberta,
+}: {
+  aberta: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`
+        h-4
+        w-4
+        shrink-0
+        transition-transform
+        duration-200
+        ${
+          aberta
+            ? "rotate-90"
+            : ""
+        }
+      `}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
 }
 
 
@@ -152,11 +217,42 @@ export function NavegacaoSistema({
   mobileAberto,
   onFecharMobile,
 }: Props) {
+
   const pathname =
     usePathname();
 
 
-  const itens: {
+  const dashboardAtivo =
+    pathname.startsWith(
+      "/dashboards"
+    );
+
+
+  const [
+    dashboardAberto,
+    setDashboardAberto,
+  ] = useState(
+    dashboardAtivo
+  );
+
+
+  useEffect(
+    () => {
+
+      if (
+        dashboardAtivo
+      ) {
+        setDashboardAberto(
+          true
+        );
+      }
+
+    },
+    [dashboardAtivo]
+  );
+
+
+  const itensAntesDashboard: {
     nome: string;
     href: string;
     icone: TipoIcone;
@@ -179,24 +275,16 @@ export function NavegacaoSistema({
         "admin",
       ],
     },
+  ];
 
-    {
-      nome:
-        "Resumo",
 
-      href:
-        "/resumo",
-
-      icone:
-        "resumo",
-
-      perfis: [
-        "usuario",
-        "contratador",
-        "admin",
-      ],
-    },
-
+  const itensDepoisDashboard: {
+    nome: string;
+    href: string;
+    icone: TipoIcone;
+    perfis:
+      TipoPermissao[];
+  }[] = [
     {
       nome:
         "Editais",
@@ -245,8 +333,105 @@ export function NavegacaoSistema({
   ];
 
 
+  function renderizarItem(
+    item: {
+      nome: string;
+      href: string;
+      icone: TipoIcone;
+      perfis:
+        TipoPermissao[];
+    }
+  ) {
+
+    if (
+      !item.perfis.includes(
+        usuario.tipoPermissao
+      )
+    ) {
+      return null;
+    }
+
+
+    const ativo =
+      pathname ===
+        item.href ||
+      pathname.startsWith(
+        `${item.href}/`
+      );
+
+
+    return (
+      <Link
+        key={
+          item.href
+        }
+        href={
+          item.href
+        }
+        title={
+          recolhida
+            ? item.nome
+            : undefined
+        }
+        onClick={
+          onFecharMobile
+        }
+        className={`
+          flex
+          min-h-11
+          items-center
+          gap-3
+          rounded-lg
+          px-3
+          text-sm
+          font-medium
+          transition
+
+          ${
+            recolhida
+              ? "lg:justify-center"
+              : ""
+          }
+        `}
+        style={{
+          backgroundColor:
+            ativo
+              ? configuracao.corPrimaria
+              : "transparent",
+
+          color:
+            ativo
+              ? "#FFFFFF"
+              : configuracao.corTextoSidebar,
+        }}
+      >
+
+        <Icone
+          tipo={
+            item.icone
+          }
+        />
+
+        <span
+          className={
+            recolhida
+              ? "lg:hidden"
+              : ""
+          }
+        >
+          {
+            item.nome
+          }
+        </span>
+
+      </Link>
+    );
+  }
+
+
   return (
     <>
+
       {/* OVERLAY MOBILE */}
 
       {mobileAberto && (
@@ -298,91 +483,211 @@ export function NavegacaoSistema({
             configuracao.corTextoSidebar,
         }}
       >
-        <nav className="flex flex-1 flex-col gap-1.5 p-3">
 
-          {itens
-            .filter(
-              (item) =>
-                item.perfis.includes(
-                  usuario.tipoPermissao
-                )
-            )
-            .map(
-              (item) => {
-                const ativo =
-                  pathname ===
-                    item.href ||
-                  pathname.startsWith(
-                    `${item.href}/`
-                  );
+        <nav
+          className="
+            flex
+            flex-1
+            flex-col
+            gap-1.5
+            p-3
+          "
+        >
+
+          {/* LISTA */}
+
+          {itensAntesDashboard.map(
+            renderizarItem
+          )}
 
 
-                return (
-                  <Link
-                    key={
-                      item.href
-                    }
-                    href={
-                      item.href
-                    }
-                    title={
-                      recolhida
-                        ? item.nome
-                        : undefined
-                    }
-                    onClick={
-                      onFecharMobile
-                    }
-                    className={`
-                      flex
-                      min-h-11
-                      items-center
-                      gap-3
-                      rounded-lg
-                      px-3
-                      text-sm
-                      font-medium
-                      transition
+          {/* =================================================
+              DASHBOARDS
+          ================================================= */}
 
-                      ${
-                        recolhida
-                          ? "lg:justify-center"
-                          : ""
-                      }
-                    `}
-                    style={{
-                      backgroundColor:
-                        ativo
-                          ? configuracao.corPrimaria
-                          : "transparent",
+          <div>
 
-                      color:
-                        ativo
-                          ? "#FFFFFF"
-                          : configuracao.corTextoSidebar,
-                    }}
-                  >
-                    <Icone
-                      tipo={
-                        item.icone
-                      }
-                    />
-
-                    <span
-                      className={
-                        recolhida
-                          ? "lg:hidden"
-                          : ""
-                      }
-                    >
-                      {
-                        item.nome
-                      }
-                    </span>
-                  </Link>
-                );
+            <button
+              type="button"
+              title={
+                recolhida
+                  ? "Dashboards"
+                  : undefined
               }
+              onClick={
+                () =>
+                  setDashboardAberto(
+                    (
+                      valor
+                    ) =>
+                      !valor
+                  )
+              }
+              className={`
+                flex
+                min-h-11
+                w-full
+                items-center
+                gap-3
+                rounded-lg
+                px-3
+                text-sm
+                font-medium
+                transition
+
+                ${
+                  recolhida
+                    ? "lg:justify-center"
+                    : ""
+                }
+              `}
+              style={{
+                backgroundColor:
+                  dashboardAtivo
+                    ? configuracao.corPrimaria
+                    : "transparent",
+
+                color:
+                  dashboardAtivo
+                    ? "#FFFFFF"
+                    : configuracao.corTextoSidebar,
+              }}
+            >
+
+              <Icone
+                tipo="dashboard"
+              />
+
+
+              <span
+                className={`
+                  flex
+                  flex-1
+                  items-center
+                  justify-between
+
+                  ${
+                    recolhida
+                      ? "lg:hidden"
+                      : ""
+                  }
+                `}
+              >
+
+                <span>
+                  Dashboards
+                </span>
+
+                <Seta
+                  aberta={
+                    dashboardAberto
+                  }
+                />
+
+              </span>
+
+            </button>
+
+
+            {/* SUBMENU */}
+
+            {dashboardAberto && (
+
+              <div
+                className={`
+                  mt-1
+                  space-y-1
+
+                  ${
+                    recolhida
+                      ? "lg:ml-0"
+                      : "ml-5"
+                  }
+                `}
+              >
+
+                <Link
+                  href="/dashboards/saude-indigena"
+                  title={
+                    recolhida
+                      ? "Saúde Indígena"
+                      : undefined
+                  }
+                  onClick={
+                    onFecharMobile
+                  }
+                  className={`
+                    flex
+                    min-h-10
+                    items-center
+                    gap-3
+                    rounded-lg
+                    px-3
+                    text-sm
+                    transition
+
+                    ${
+                      recolhida
+                        ? "lg:justify-center"
+                        : ""
+                    }
+                  `}
+                  style={{
+                    backgroundColor:
+                      pathname ===
+                        "/dashboards/saude-indigena" ||
+                      pathname.startsWith(
+                        "/dashboards/saude-indigena/"
+                      )
+                        ? configuracao.corPrimaria
+                        : "transparent",
+
+                    color:
+                      pathname ===
+                        "/dashboards/saude-indigena" ||
+                      pathname.startsWith(
+                        "/dashboards/saude-indigena/"
+                      )
+                        ? "#FFFFFF"
+                        : configuracao.corTextoSidebar,
+                  }}
+                >
+
+                  <span
+                    className="
+                      h-1.5
+                      w-1.5
+                      shrink-0
+                      rounded-full
+                      bg-current
+                    "
+                  />
+
+
+                  <span
+                    className={
+                      recolhida
+                        ? "lg:hidden"
+                        : ""
+                    }
+                  >
+                    Saúde Indígena
+                  </span>
+
+                </Link>
+
+              </div>
+
             )}
+
+          </div>
+
+
+          {/* RESTANTE DO MENU */}
+
+          {itensDepoisDashboard.map(
+            renderizarItem
+          )}
 
         </nav>
 
@@ -390,6 +695,7 @@ export function NavegacaoSistema({
         {/* PERFIL NO MOBILE */}
 
         <div className="border-t border-white/10 p-4 lg:hidden">
+
           <p className="truncate text-sm font-medium">
             {
               usuario.nome
@@ -401,9 +707,11 @@ export function NavegacaoSistema({
               usuario.email
             }
           </p>
+
         </div>
 
       </aside>
+
     </>
   );
 }

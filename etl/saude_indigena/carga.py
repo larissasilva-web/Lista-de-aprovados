@@ -1,4 +1,5 @@
 import os
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -44,18 +45,29 @@ PGUSER = os.getenv("PGUSER")
 PGPASSWORD = os.getenv("PGPASSWORD")
 PGSSLMODE = os.getenv("PGSSLMODE", "require")
 
+
 # ============================================================
 # MAPEAMENTO DAS COLUNAS
 # ============================================================
 
 COLUNAS = {
-    "Vaga": "codigo_vaga",
-    "Edital": "edital",
-    "Nome DSEI": "nome_dsei",
+    "Vaga":
+        "codigo_vaga",
 
-    "Inscritos": "inscritos",
-    "Aptos para analise": "aptos_para_analise",
-    "Cancelados": "cancelados",
+    "Edital":
+        "edital",
+
+    "Nome DSEI":
+        "nome_dsei",
+
+    "Inscritos":
+        "inscritos",
+
+    "Aptos para analise":
+        "aptos_para_analise",
+
+    "Cancelados":
+        "cancelados",
 
     "Reprovados por não finalizar o questionário":
         "reprovados_nao_finalizar_questionario",
@@ -72,14 +84,16 @@ COLUNAS = {
     "Observação":
         "observacao",
 
+    "Nome do cargo":
+        "cargo",
+
+    # Coluna V da planilha Auditoria.
+    #
+    # Este campo será utilizado somente como fallback
+    # para processos em que não houver dados individuais
+    # disponíveis na tabela de entrevistas.
     "Total convocados para entrevista":
-        "total_convocados_entrevista",
-
-    "Total de Aprovados":
-        "total_aprovados",
-
-    "Total de Contratados":
-        "total_contratados",
+        "total_convocados_entrevista_legado",
 }
 
 
@@ -91,9 +105,7 @@ CAMPOS_NUMERICOS = {
     "eliminados_por_nota",
     "reprovados_analise",
     "triados",
-    "total_convocados_entrevista",
-    "total_aprovados",
-    "total_contratados",
+    "total_convocados_entrevista_legado",
 }
 
 
@@ -102,6 +114,7 @@ CAMPOS_NUMERICOS = {
 # ============================================================
 
 def texto(valor):
+
     if valor is None:
         return None
 
@@ -111,10 +124,12 @@ def texto(valor):
 
 
 def inteiro(valor):
+
     if valor is None:
         return None
 
     if isinstance(valor, str):
+
         valor = valor.strip()
 
         if valor == "":
@@ -125,11 +140,64 @@ def inteiro(valor):
     numero = float(valor)
 
     if not numero.is_integer():
+
         raise ValueError(
             f"Valor não inteiro encontrado: {valor}"
         )
 
     return int(numero)
+
+
+# ============================================================
+# REGRA HISTÓRICA DA ETAPA DE ENTREVISTA
+# ============================================================
+
+def edital_sem_etapa_entrevista(edital):
+
+    """
+    Até o edital 09/2025 não existia etapa de entrevista.
+
+    Consequentemente, valores 0 eventualmente existentes
+    na coluna V desses editais não significam que houve
+    entrevista com zero convocados.
+
+    Para esses processos o valor correto é NULL /
+    "não se aplica".
+    """
+
+    if not edital:
+        return False
+
+    match = re.match(
+        r"^\s*(\d{1,3})/(\d{4})",
+        str(edital),
+    )
+
+    if not match:
+        return False
+
+    numero_edital = int(
+        match.group(1)
+    )
+
+    ano = int(
+        match.group(2)
+    )
+
+    # Editais anteriores a 2025 também não possuem
+    # a etapa histórica que estamos tratando.
+    if ano < 2025:
+        return True
+
+    # Em 2025, a etapa passou a existir depois do
+    # edital 09/2025.
+    if (
+        ano == 2025
+        and numero_edital <= 9
+    ):
+        return True
+
+    return False
 
 
 # ============================================================
@@ -167,7 +235,10 @@ def ler_planilha():
         .execute()
     )
 
-    return resposta.get("values", [])
+    return resposta.get(
+        "values",
+        [],
+    )
 
 
 # ============================================================
@@ -177,7 +248,10 @@ def ler_planilha():
 def transformar(linhas):
 
     if not linhas:
-        raise RuntimeError("Planilha vazia.")
+
+        raise RuntimeError(
+            "Planilha vazia."
+        )
 
     cabecalho = linhas[0]
 
@@ -188,6 +262,7 @@ def transformar(linhas):
     ]
 
     if faltantes:
+
         raise RuntimeError(
             "Colunas obrigatórias ausentes: "
             + ", ".join(faltantes)
@@ -201,7 +276,10 @@ def transformar(linhas):
         start=2,
     ):
 
-        # Ignora linha completamente vazia
+        # ----------------------------------------------------
+        # Ignorar linha completamente vazia
+        # ----------------------------------------------------
+
         if not any(
             str(valor).strip()
             for valor in linha
@@ -209,78 +287,162 @@ def transformar(linhas):
         ):
             continue
 
-        linha += [None] * (
-            len(cabecalho) - len(linha)
+        # ----------------------------------------------------
+        # Completar eventuais colunas ausentes
+        # ----------------------------------------------------
+
+        linha = linha + [None] * (
+            len(cabecalho)
+            - len(linha)
         )
 
         origem = dict(
-            zip(cabecalho, linha)
+            zip(
+                cabecalho,
+                linha,
+            )
         )
 
         registro = {
-            "linha_origem": numero_linha
+            "linha_origem":
+                numero_linha
         }
 
         try:
 
-            for coluna_origem, coluna_destino in COLUNAS.items():
+            # ------------------------------------------------
+            # Mapear campos
+            # ------------------------------------------------
 
-                valor = origem.get(coluna_origem)
+            for (
+                coluna_origem,
+                coluna_destino,
+            ) in COLUNAS.items():
 
-                if coluna_destino in CAMPOS_NUMERICOS:
-                    valor = inteiro(valor)
-                else:
-                    valor = texto(valor)
+                valor = origem.get(
+                    coluna_origem
+                )
 
-                registro[coluna_destino] = valor
+                if (
+                    coluna_destino
+                    in CAMPOS_NUMERICOS
+                ):
 
-            # Campos obrigatórios
-            if not registro["codigo_vaga"]:
-                raise ValueError("Vaga vazia")
-
-            if not registro["edital"]:
-                raise ValueError("Edital vazio")
-
-            # Não permitir negativos
-            for campo in CAMPOS_NUMERICOS:
-
-                valor = registro.get(campo)
-
-                if valor is not None and valor < 0:
-                    raise ValueError(
-                        f"{campo} possui valor negativo"
+                    valor = inteiro(
+                        valor
                     )
 
-            registros.append(registro)
+                else:
+
+                    valor = texto(
+                        valor
+                    )
+
+                registro[
+                    coluna_destino
+                ] = valor
+
+            # ------------------------------------------------
+            # Regra histórica
+            #
+            # Até o edital 09/2025 não existia etapa
+            # de entrevista.
+            #
+            # Portanto, mesmo que a planilha possua
+            # 0 na coluna V, o valor será NULL.
+            # ------------------------------------------------
+
+            if edital_sem_etapa_entrevista(
+                registro.get("edital")
+            ):
+
+                registro[
+                    "total_convocados_entrevista_legado"
+                ] = None
+
+            # ------------------------------------------------
+            # Campos obrigatórios
+            # ------------------------------------------------
+
+            if not registro[
+                "codigo_vaga"
+            ]:
+
+                raise ValueError(
+                    "Vaga vazia"
+                )
+
+            if not registro[
+                "edital"
+            ]:
+
+                raise ValueError(
+                    "Edital vazio"
+                )
+
+            # ------------------------------------------------
+            # Não permitir números negativos
+            # ------------------------------------------------
+
+            for campo in CAMPOS_NUMERICOS:
+
+                valor = registro.get(
+                    campo
+                )
+
+                if (
+                    valor is not None
+                    and valor < 0
+                ):
+
+                    raise ValueError(
+                        f"{campo} possui "
+                        "valor negativo"
+                    )
+
+            registros.append(
+                registro
+            )
 
         except Exception as erro:
 
             erros.append(
-                f"Linha {numero_linha}: {erro}"
+                f"Linha "
+                f"{numero_linha}: "
+                f"{erro}"
             )
 
-    return registros, erros
+    return (
+        registros,
+        erros,
+    )
 
 
 # ============================================================
 # DUPLICIDADES
 # ============================================================
 
-def localizar_duplicidades(registros):
+def localizar_duplicidades(
+    registros
+):
 
     chaves = [
         (
-            r["edital"],
-            r["codigo_vaga"],
+            registro["edital"],
+            registro["codigo_vaga"],
         )
-        for r in registros
+        for registro
+        in registros
     ]
 
-    contador = Counter(chaves)
+    contador = Counter(
+        chaves
+    )
 
     return {
         chave: quantidade
-        for chave, quantidade in contador.items()
+        for chave, quantidade
+        in contador.items()
         if quantidade > 1
     }
 
@@ -289,7 +451,9 @@ def localizar_duplicidades(registros):
 # COMPARAÇÃO COM POSTGRESQL
 # ============================================================
 
-def comparar_com_banco(registros):
+def comparar_com_banco(
+    registros
+):
 
     with psycopg.connect(
         host=PGHOST,
@@ -307,13 +471,20 @@ def comparar_com_banco(registros):
                 SELECT
                     edital,
                     codigo_vaga
-                FROM gerenciamento_concursos
+                FROM
+                    gerenciamento_concursos
                     .analise_curricular_saude_indigena;
             """)
 
             existentes = {
-                (edital, codigo_vaga)
-                for edital, codigo_vaga
+                (
+                    edital,
+                    codigo_vaga,
+                )
+                for (
+                    edital,
+                    codigo_vaga,
+                )
                 in cursor.fetchall()
             }
 
@@ -329,18 +500,28 @@ def comparar_com_banco(registros):
             registro["codigo_vaga"],
         )
 
-        chaves_fonte.add(chave)
+        chaves_fonte.add(
+            chave
+        )
 
         if chave in existentes:
+
             atualizar += 1
+
         else:
+
             inserir += 1
 
     inativar = len(
-        existentes - chaves_fonte
+        existentes
+        - chaves_fonte
     )
 
-    return inserir, atualizar, inativar
+    return (
+        inserir,
+        atualizar,
+        inativar,
+    )
 
 
 # ============================================================
@@ -349,9 +530,17 @@ def comparar_com_banco(registros):
 
 def main():
 
-    print("=" * 60)
-    print("ETL SAÚDE INDÍGENA - DRY RUN")
-    print("=" * 60)
+    print("=" * 65)
+
+    print(
+        "ETL SAÚDE INDÍGENA - DRY RUN"
+    )
+
+    print("=" * 65)
+
+    # --------------------------------------------------------
+    # Ler Google Sheets
+    # --------------------------------------------------------
 
     linhas = ler_planilha()
 
@@ -360,7 +549,20 @@ def main():
         f"{len(linhas) - 1}"
     )
 
-    registros, erros = transformar(linhas)
+    # --------------------------------------------------------
+    # Transformar
+    # --------------------------------------------------------
+
+    (
+        registros,
+        erros,
+    ) = transformar(
+        linhas
+    )
+
+    # --------------------------------------------------------
+    # Duplicidades
+    # --------------------------------------------------------
 
     duplicidades = localizar_duplicidades(
         registros
@@ -377,24 +579,35 @@ def main():
     )
 
     print(
-        f"Duplicidades Edital + Vaga: "
+        "Duplicidades Edital + Vaga: "
         f"{len(duplicidades)}"
     )
 
     # --------------------------------------------------------
-    # Se houver problemas estruturais, NÃO prosseguir
+    # Mostrar erros
     # --------------------------------------------------------
 
     if erros:
 
-        print("\nERROS ENCONTRADOS:")
+        print(
+            "\nERROS ENCONTRADOS:"
+        )
 
         for erro in erros[:30]:
-            print(f" - {erro}")
+
+            print(
+                f" - {erro}"
+            )
+
+    # --------------------------------------------------------
+    # Mostrar duplicidades
+    # --------------------------------------------------------
 
     if duplicidades:
 
-        print("\nDUPLICIDADES ENCONTRADAS:")
+        print(
+            "\nDUPLICIDADES ENCONTRADAS:"
+        )
 
         for (
             edital,
@@ -409,26 +622,47 @@ def main():
                 f"{quantidade} linhas"
             )
 
-    if erros or duplicidades:
+    # --------------------------------------------------------
+    # Bloquear em caso de erro
+    # --------------------------------------------------------
 
-        print("\nCarga bloqueada.")
+    if (
+        erros
+        or duplicidades
+    ):
+
         print(
-            "Corrija os problemas antes de gravar no banco."
+            "\nCarga bloqueada."
+        )
+
+        print(
+            "Corrija os problemas antes "
+            "de gravar no banco."
         )
 
         return
 
     # --------------------------------------------------------
-    # Comparar com o banco
+    # Comparar com PostgreSQL
     # --------------------------------------------------------
 
-    inserir, atualizar, inativar = comparar_com_banco(
+    (
+        inserir,
+        atualizar,
+        inativar,
+    ) = comparar_com_banco(
         registros
     )
 
-    print("\n" + "=" * 60)
-    print("PLANO DA SINCRONIZAÇÃO")
-    print("=" * 60)
+    print(
+        "\n" + "=" * 65
+    )
+
+    print(
+        "PLANO DA SINCRONIZAÇÃO"
+    )
+
+    print("=" * 65)
 
     print(
         f"INSERT:  {inserir}"
@@ -443,77 +677,220 @@ def main():
     )
 
     print(
-        f"TOTAL NA FONTE: {len(registros)}"
+        f"TOTAL NA FONTE: "
+        f"{len(registros)}"
     )
 
-    # --------------------------------------------------------
-    # Totais para conferência
-    # --------------------------------------------------------
+    # ========================================================
+    # TOTAIS DA ANÁLISE CURRICULAR
+    # ========================================================
 
     total_inscritos = sum(
-        r["inscritos"] or 0
-        for r in registros
+        registro[
+            "inscritos"
+        ] or 0
+        for registro
+        in registros
     )
 
     total_aptos = sum(
-        r["aptos_para_analise"] or 0
-        for r in registros
+        registro[
+            "aptos_para_analise"
+        ] or 0
+        for registro
+        in registros
+    )
+
+    total_cancelados = sum(
+        registro[
+            "cancelados"
+        ] or 0
+        for registro
+        in registros
+    )
+
+    total_questionario = sum(
+        registro[
+            "reprovados_nao_finalizar_questionario"
+        ] or 0
+        for registro
+        in registros
+    )
+
+    total_eliminados_nota = sum(
+        registro[
+            "eliminados_por_nota"
+        ] or 0
+        for registro
+        in registros
+    )
+
+    total_reprovados_analise = sum(
+        registro[
+            "reprovados_analise"
+        ] or 0
+        for registro
+        in registros
     )
 
     total_triados = sum(
-        r["triados"] or 0
-        for r in registros
+        registro[
+            "triados"
+        ] or 0
+        for registro
+        in registros
     )
-
-    total_convocados = sum(
-        r["total_convocados_entrevista"] or 0
-        for r in registros
-    )
-
-    total_aprovados = sum(
-        r["total_aprovados"] or 0
-        for r in registros
-    )
-
-    total_contratados = sum(
-        r["total_contratados"] or 0
-        for r in registros
-    )
-
-    print("\nTOTAIS DA FONTE:")
 
     print(
-        f"Inscritos: {total_inscritos:,}"
+        "\nTOTAIS DA FONTE:"
+    )
+
+    print(
+        f"Inscritos: "
+        f"{total_inscritos:,}"
         .replace(",", ".")
     )
 
     print(
-        f"Aptos para análise: {total_aptos:,}"
+        f"Aptos para análise: "
+        f"{total_aptos:,}"
         .replace(",", ".")
     )
 
     print(
-        f"Triados: {total_triados:,}"
+        f"Cancelados: "
+        f"{total_cancelados:,}"
         .replace(",", ".")
     )
 
     print(
-        f"Convocados para entrevista: {total_convocados:,}"
+        "Não finalizaram questionário: "
+        f"{total_questionario:,}"
         .replace(",", ".")
     )
 
     print(
-        f"Aprovados: {total_aprovados:,}"
+        f"Eliminados por nota: "
+        f"{total_eliminados_nota:,}"
         .replace(",", ".")
     )
 
     print(
-        f"Contratados: {total_contratados:,}"
+        f"Reprovados na análise: "
+        f"{total_reprovados_analise:,}"
         .replace(",", ".")
     )
 
-    print("\nDRY RUN concluído.")
-    print("Nenhum dado foi alterado no Supabase.")
+    print(
+        f"Triados: "
+        f"{total_triados:,}"
+        .replace(",", ".")
+    )
+
+    # ========================================================
+    # ENTREVISTAS - FONTE LEGADA
+    # ========================================================
+
+    vagas_com_legado = sum(
+        1
+        for registro
+        in registros
+        if registro[
+            "total_convocados_entrevista_legado"
+        ] is not None
+    )
+
+    vagas_com_convocados = sum(
+        1
+        for registro
+        in registros
+        if (
+            registro[
+                "total_convocados_entrevista_legado"
+            ] is not None
+            and
+            registro[
+                "total_convocados_entrevista_legado"
+            ] > 0
+        )
+    )
+
+    total_convocados_legado = sum(
+        registro[
+            "total_convocados_entrevista_legado"
+        ] or 0
+        for registro
+        in registros
+    )
+
+    vagas_sem_etapa_historica = sum(
+        1
+        for registro
+        in registros
+        if edital_sem_etapa_entrevista(
+            registro.get("edital")
+        )
+    )
+
+    vagas_sem_dado_entrevista = sum(
+        1
+        for registro
+        in registros
+        if (
+            not edital_sem_etapa_entrevista(
+                registro.get("edital")
+            )
+            and
+            registro[
+                "total_convocados_entrevista_legado"
+            ] is None
+        )
+    )
+
+    print(
+        "\nENTREVISTAS - FONTE LEGADA:"
+    )
+
+    print(
+        f"Vagas com dado legado: "
+        f"{vagas_com_legado}"
+    )
+
+    print(
+        f"Vagas com convocados: "
+        f"{vagas_com_convocados}"
+    )
+
+    print(
+        "Total convocados legado: "
+        f"{total_convocados_legado:,}"
+        .replace(",", ".")
+    )
+
+    print(
+        "Vagas sem etapa histórica "
+        "de entrevista: "
+        f"{vagas_sem_etapa_historica}"
+    )
+
+    print(
+        "Vagas posteriores sem dado "
+        "de entrevista: "
+        f"{vagas_sem_dado_entrevista}"
+    )
+
+    # ========================================================
+    # FINAL
+    # ========================================================
+
+    print(
+        "\nDRY RUN concluído."
+    )
+
+    print(
+        "Nenhum dado foi alterado "
+        "no Supabase."
+    )
 
 
 if __name__ == "__main__":

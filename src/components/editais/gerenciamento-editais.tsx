@@ -14,6 +14,24 @@ import {
   createClient,
 } from "@/lib/supabase/client";
 
+type FonteIntegracao = {
+  edital_id: string;
+
+  pasta_analise_id: string | null;
+
+  pasta_entrevistas_id: string | null;
+
+  planilha_cruzamento_id: string | null;
+
+  etl_habilitado: boolean;
+
+  ultima_sincronizacao: string | null;
+
+  status_sincronizacao: string | null;
+
+  mensagem_erro: string | null;
+};
+
 type Edital = {
   id: string;
 
@@ -30,12 +48,16 @@ type Edital = {
   prazo_validade: string | null;
 
   prorrogavel: boolean | null;
+
+  fonte_integracao: FonteIntegracao | null;
 };
 
 type Props = {
   editaisIniciais: Edital[];
 
   podeExcluir: boolean;
+
+  podeConfigurarIntegracao: boolean;
 };
 
 const PROCESSOS_SELETIVOS = [
@@ -134,9 +156,51 @@ function extrairPrazo(
   };
 }
 
+function extrairIdGoogle(
+  valor: string
+) {
+  const texto =
+    valor.trim();
+
+  if (!texto) {
+    return "";
+  }
+
+  if (
+    /^[A-Za-z0-9_-]{15,}$/.test(
+      texto
+    )
+  ) {
+    return texto;
+  }
+
+  const padroes = [
+    /\/folders\/([A-Za-z0-9_-]+)/i,
+    /\/spreadsheets\/d\/([A-Za-z0-9_-]+)/i,
+    /\/file\/d\/([A-Za-z0-9_-]+)/i,
+    /[?&]id=([A-Za-z0-9_-]+)/i,
+  ];
+
+  for (const padrao of padroes) {
+    const match =
+      texto.match(
+        padrao
+      );
+
+    if (
+      match?.[1]
+    ) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
 export function GerenciamentoEditais({
   editaisIniciais,
   podeExcluir,
+  podeConfigurarIntegracao,
 }: Props) {
   const router =
     useRouter();
@@ -201,6 +265,26 @@ export function GerenciamentoEditais({
     prorrogavel,
     setProrrogavel,
   ] = useState(false);
+
+  const [
+    etlHabilitado,
+    setEtlHabilitado,
+  ] = useState(false);
+
+  const [
+    pastaAnalise,
+    setPastaAnalise,
+  ] = useState("");
+
+  const [
+    pastaEntrevistas,
+    setPastaEntrevistas,
+  ] = useState("");
+
+  const [
+    planilhaCruzamento,
+    setPlanilhaCruzamento,
+  ] = useState("");
 
   const [
     erro,
@@ -307,6 +391,30 @@ export function GerenciamentoEditais({
       edital.prorrogavel ??
         false
     );
+
+    setEtlHabilitado(
+      edital.fonte_integracao
+        ?.etl_habilitado ??
+        false
+    );
+
+    setPastaAnalise(
+      edital.fonte_integracao
+        ?.pasta_analise_id ??
+        ""
+    );
+
+    setPastaEntrevistas(
+      edital.fonte_integracao
+        ?.pasta_entrevistas_id ??
+        ""
+    );
+
+    setPlanilhaCruzamento(
+      edital.fonte_integracao
+        ?.planilha_cruzamento_id ??
+        ""
+    );
   }
 
   function fecharEdicao() {
@@ -381,6 +489,54 @@ export function GerenciamentoEditais({
       return;
     }
 
+    let pastaAnaliseId = "";
+    let pastaEntrevistasId = "";
+    let planilhaCruzamentoId = "";
+
+    if (
+      podeConfigurarIntegracao &&
+      etlHabilitado
+    ) {
+      pastaAnaliseId =
+        extrairIdGoogle(
+          pastaAnalise
+        );
+
+      pastaEntrevistasId =
+        extrairIdGoogle(
+          pastaEntrevistas
+        );
+
+      planilhaCruzamentoId =
+        extrairIdGoogle(
+          planilhaCruzamento
+        );
+
+      if (!pastaAnaliseId) {
+        setErro(
+          "Informe um ID ou link válido para a pasta de análise."
+        );
+
+        return;
+      }
+
+      if (!pastaEntrevistasId) {
+        setErro(
+          "Informe um ID ou link válido para a pasta de entrevistas."
+        );
+
+        return;
+      }
+
+      if (!planilhaCruzamentoId) {
+        setErro(
+          "Informe um ID ou link válido para a planilha de cruzamento."
+        );
+
+        return;
+      }
+    }
+
     setProcessandoId(
       editalEditando.id
     );
@@ -390,7 +546,7 @@ export function GerenciamentoEditais({
         createClient();
 
       const {
-        error,
+        error: erroEdital,
       } = await supabase
         .from("editais")
         .update({
@@ -421,8 +577,65 @@ export function GerenciamentoEditais({
           editalEditando.id
         );
 
-      if (error) {
-        throw error;
+      if (erroEdital) {
+        throw erroEdital;
+      }
+
+      if (
+        podeConfigurarIntegracao
+      ) {
+        if (etlHabilitado) {
+          const {
+            error: erroIntegracao,
+          } = await supabase
+            .from("fontes_editais")
+            .upsert(
+              {
+                edital_id:
+                  editalEditando.id,
+
+                pasta_analise_id:
+                  pastaAnaliseId,
+
+                pasta_entrevistas_id:
+                  pastaEntrevistasId,
+
+                planilha_cruzamento_id:
+                  planilhaCruzamentoId,
+
+                etl_habilitado:
+                  true,
+              },
+              {
+                onConflict:
+                  "edital_id",
+              }
+            );
+
+          if (erroIntegracao) {
+            throw erroIntegracao;
+          }
+        } else if (
+          editalEditando
+            .fonte_integracao
+        ) {
+          const {
+            error: erroIntegracao,
+          } = await supabase
+            .from("fontes_editais")
+            .update({
+              etl_habilitado:
+                false,
+            })
+            .eq(
+              "edital_id",
+              editalEditando.id
+            );
+
+          if (erroIntegracao) {
+            throw erroIntegracao;
+          }
+        }
       }
 
       setEditalEditando(
@@ -670,7 +883,7 @@ export function GerenciamentoEditais({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px]">
+          <table className="w-full min-w-[1320px]">
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200">
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
@@ -698,6 +911,10 @@ export function GerenciamentoEditais({
                 </th>
 
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Integração
+                </th>
+
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
                   Status
                 </th>
 
@@ -713,7 +930,7 @@ export function GerenciamentoEditais({
                 <tr>
                   <td
                     colSpan={
-                      8
+                      9
                     }
                     className="px-5 py-12 text-center text-sm text-slate-500"
                   >
@@ -767,6 +984,22 @@ export function GerenciamentoEditais({
                           {edital.prorrogavel
                             ? "Sim"
                             : "Não"}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={
+                              edital.fonte_integracao
+                                ?.etl_habilitado
+                                ? "inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                                : "inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                            }
+                          >
+                            {edital.fonte_integracao
+                              ?.etl_habilitado
+                              ? "Automática"
+                              : "Manual"}
+                          </span>
                         </td>
 
                         <td className="px-5 py-4">
@@ -1083,6 +1316,112 @@ export function GerenciamentoEditais({
                     </option>
                   </select>
                 </div>
+
+                {podeConfigurarIntegracao && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">
+                          Integração de dados
+                        </h4>
+
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Ative somente para editais que utilizarão o novo fluxo automático. Os editais históricos podem permanecer desativados.
+                        </p>
+                      </div>
+
+                      <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={
+                            etlHabilitado
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setEtlHabilitado(
+                              event.target.checked
+                            )
+                          }
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+
+                        Automatizar
+                      </label>
+                    </div>
+
+                    {etlHabilitado && (
+                      <div className="mt-5 space-y-4 border-t border-slate-200 pt-5">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Pasta de análise *
+                          </label>
+
+                          <input
+                            value={
+                              pastaAnalise
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setPastaAnalise(
+                                event.target.value
+                              )
+                            }
+                            placeholder="Cole o link da pasta ou somente o ID"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Pasta de entrevistas *
+                          </label>
+
+                          <input
+                            value={
+                              pastaEntrevistas
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setPastaEntrevistas(
+                                event.target.value
+                              )
+                            }
+                            placeholder="Cole o link da pasta ou somente o ID"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Planilha de cruzamento *
+                          </label>
+
+                          <input
+                            value={
+                              planilhaCruzamento
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setPlanilhaCruzamento(
+                                event.target.value
+                              )
+                            }
+                            placeholder="Cole o link da planilha ou somente o ID"
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                          />
+                        </div>
+
+                        <p className="text-xs leading-5 text-slate-500">
+                          Você pode colar o link completo do Google Drive/Sheets. O sistema salva somente o ID necessário para o ETL.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                   A edição altera somente os dados cadastrais do edital. A lista/anexo original de aprovados não é substituída.

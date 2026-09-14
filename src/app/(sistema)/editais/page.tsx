@@ -49,7 +49,7 @@ export default async function EditaisPage() {
 
   const {
     data: editais,
-    error,
+    error: erroEditais,
   } = await supabase
     .from("editais")
     .select(`
@@ -69,13 +69,61 @@ export default async function EditaisPage() {
       }
     );
 
-  if (error) {
+  if (erroEditais) {
     throw new Error(
-      `Erro ao carregar editais: ${error.message}`
+      `Erro ao carregar editais: ${erroEditais.message}`
     );
   }
 
-  const podeExcluir =
+  const {
+    data: fontesEditais,
+    error: erroFontes,
+  } = await supabase
+    .from("fontes_editais")
+    .select(`
+      edital_id,
+      pasta_analise_id,
+      pasta_entrevistas_id,
+      planilha_cruzamento_id,
+      etl_habilitado,
+      ultima_sincronizacao,
+      status_sincronizacao,
+      mensagem_erro
+    `);
+
+  if (erroFontes) {
+    throw new Error(
+      `Erro ao carregar integrações dos editais: ${erroFontes.message}`
+    );
+  }
+
+  const fontesPorEdital =
+    new Map(
+      (
+        fontesEditais ?? []
+      ).map(
+        (fonte) => [
+          fonte.edital_id,
+          fonte,
+        ]
+      )
+    );
+
+  const editaisComIntegracao =
+    (
+      editais ?? []
+    ).map(
+      (edital) => ({
+        ...edital,
+
+        fonte_integracao:
+          fontesPorEdital.get(
+            edital.id
+          ) ?? null,
+      })
+    );
+
+  const ehAdmin =
     permissao.tipo_permissao ===
     "admin";
 
@@ -97,10 +145,13 @@ export default async function EditaisPage() {
 
       <GerenciamentoEditais
         editaisIniciais={
-          editais ?? []
+          editaisComIntegracao
         }
         podeExcluir={
-          podeExcluir
+          ehAdmin
+        }
+        podeConfigurarIntegracao={
+          ehAdmin
         }
       />
     </section>
