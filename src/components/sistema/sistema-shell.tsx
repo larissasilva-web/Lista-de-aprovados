@@ -16,21 +16,23 @@ import {
 } from "@/lib/configuracoes/tema";
 
 import {
+  ROTULO_PERMISSAO,
+} from "@/lib/acesso/modulos";
+import type {
+  ModuloSistema,
+  TipoPermissao,
+} from "@/lib/acesso/modulos";
+
+import {
   NavegacaoSistema,
 } from "@/components/sistema/navegacao-sistema";
-
-
-type TipoPermissao =
-  | "usuario"
-  | "contratador"
-  | "admin";
 
 
 type Usuario = {
   nome: string;
   email: string;
-  tipoPermissao:
-    TipoPermissao;
+  tipoPermissao: TipoPermissao;
+  modulos: Record<ModuloSistema, boolean>;
 };
 
 
@@ -365,16 +367,17 @@ export function SistemaShell({
           {/* USUÁRIO */}
 
           <div className="hidden min-w-0 text-right md:block">
-            <p className="max-w-48 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
-              {
-                usuario.nome
-              }
-            </p>
+            <div className="flex items-center justify-end gap-2">
+              <p className="max-w-48 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                {usuario.nome}
+              </p>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {ROTULO_PERMISSAO[usuario.tipoPermissao]}
+              </span>
+            </div>
 
-            <p className="max-w-48 truncate text-xs text-slate-400">
-              {
-                usuario.email
-              }
+            <p className="max-w-64 truncate text-xs text-slate-400">
+              {usuario.email}
             </p>
           </div>
 

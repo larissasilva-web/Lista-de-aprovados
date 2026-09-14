@@ -11,7 +11,7 @@ import {
 } from "@/components/editais/novo-edital-modal";
 
 import {
-  exigirPermissao,
+  exigirModulo,
 } from "@/lib/auth/usuario-atual";
 
 import {
@@ -20,36 +20,13 @@ import {
 
 export default async function EditaisPage() {
   const usuarioAtual =
-    await exigirPermissao([
+    await exigirModulo("editais", [
       "contratador",
       "admin",
     ]);
 
   const supabase =
     await createClient();
-
-  const {
-    data: permissao,
-    error: erroPermissao,
-  } = await supabase
-    .from("permissoes")
-    .select(
-      "tipo_permissao"
-    )
-    .ilike(
-      "email",
-      usuarioAtual.email
-    )
-    .maybeSingle();
-
-  if (
-    erroPermissao ||
-    !permissao
-  ) {
-    throw new Error(
-      "Não foi possível identificar a permissão do usuário."
-    );
-  }
 
   const {
     data: editais,
@@ -128,7 +105,7 @@ export default async function EditaisPage() {
     );
 
   const ehAdmin =
-    permissao.tipo_permissao ===
+    usuarioAtual.tipoPermissao ===
     "admin";
 
   return (

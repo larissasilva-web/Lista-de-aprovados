@@ -16,18 +16,20 @@ import {
   ConfiguracaoSistema,
 } from "@/lib/configuracoes/tema";
 
-
-type TipoPermissao =
-  | "usuario"
-  | "contratador"
-  | "admin";
+import {
+  ROTULO_PERMISSAO,
+} from "@/lib/acesso/modulos";
+import type {
+  ModuloSistema,
+  TipoPermissao,
+} from "@/lib/acesso/modulos";
 
 
 type Usuario = {
   nome: string;
   email: string;
-  tipoPermissao:
-    TipoPermissao;
+  tipoPermissao: TipoPermissao;
+  modulos: Record<ModuloSistema, boolean>;
 };
 
 
@@ -258,6 +260,7 @@ export function NavegacaoSistema({
     icone: TipoIcone;
     perfis:
       TipoPermissao[];
+    modulo: ModuloSistema;
   }[] = [
     {
       nome:
@@ -268,6 +271,8 @@ export function NavegacaoSistema({
 
       icone:
         "lista",
+
+      modulo: "lista",
 
       perfis: [
         "usuario",
@@ -284,6 +289,7 @@ export function NavegacaoSistema({
     icone: TipoIcone;
     perfis:
       TipoPermissao[];
+    modulo: ModuloSistema;
   }[] = [
     {
       nome:
@@ -294,6 +300,8 @@ export function NavegacaoSistema({
 
       icone:
         "editais",
+
+      modulo: "editais",
 
       perfis: [
         "contratador",
@@ -311,6 +319,8 @@ export function NavegacaoSistema({
       icone:
         "usuarios",
 
+      modulo: "permissoes",
+
       perfis: [
         "admin",
       ],
@@ -326,6 +336,8 @@ export function NavegacaoSistema({
       icone:
         "configuracoes",
 
+      modulo: "configuracoes",
+
       perfis: [
         "admin",
       ],
@@ -340,13 +352,15 @@ export function NavegacaoSistema({
       icone: TipoIcone;
       perfis:
         TipoPermissao[];
+      modulo: ModuloSistema;
     }
   ) {
 
     if (
       !item.perfis.includes(
         usuario.tipoPermissao
-      )
+      ) ||
+      !usuario.modulos[item.modulo]
     ) {
       return null;
     }
@@ -505,6 +519,7 @@ export function NavegacaoSistema({
               DASHBOARDS
           ================================================= */}
 
+          {usuario.modulos.dashboards && (
           <div>
 
             <button
@@ -681,6 +696,7 @@ export function NavegacaoSistema({
             )}
 
           </div>
+          )}
 
 
           {/* RESTANTE DO MENU */}
@@ -703,10 +719,12 @@ export function NavegacaoSistema({
           </p>
 
           <p className="mt-1 truncate text-xs opacity-70">
-            {
-              usuario.email
-            }
+            {usuario.email}
           </p>
+
+          <span className="mt-2 inline-flex rounded-full border border-white/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wide opacity-80">
+            {ROTULO_PERMISSAO[usuario.tipoPermissao]}
+          </span>
 
         </div>
 

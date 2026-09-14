@@ -4,7 +4,7 @@ import {
 } from "@/components/dashboards/dashboard-saude-indigena";
 
 import {
-  exigirPermissao,
+  exigirModulo,
 } from "@/lib/auth/usuario-atual";
 
 import {
@@ -14,7 +14,7 @@ import {
 
 export default async function SaudeIndigenaPage() {
 
-  await exigirPermissao([
+  await exigirModulo("dashboards", [
     "usuario",
     "contratador",
     "admin",

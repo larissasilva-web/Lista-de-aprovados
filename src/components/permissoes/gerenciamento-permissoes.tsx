@@ -11,6 +11,7 @@ import type { FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   acessoPadraoPorPerfil,
+  modulosPermitidosPorPerfil,
   MODULOS_SISTEMA,
   ROTULO_MODULO,
   ROTULO_PERMISSAO,
@@ -129,7 +130,7 @@ function Switch({
   );
 }
 
-export function GerenciamentoPermissoesV2() {
+export function GerenciamentoPermissoes() {
   const [usuarios, setUsuarios] = useState<Permissao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -273,7 +274,9 @@ export function GerenciamentoPermissoesV2() {
       | "configuracoes",
     valor: boolean
   ) {
-    if (form.tipo_permissao === "admin") return;
+    const permitidos = modulosPermitidosPorPerfil(form.tipo_permissao);
+
+    if (form.tipo_permissao === "admin" || !permitidos[modulo]) return;
 
     const chave = `acesso_${modulo}` as keyof Formulario;
 
@@ -290,6 +293,19 @@ export function GerenciamentoPermissoesV2() {
 
     if (!form.email.trim()) {
       setErro("Informe o e-mail do usuário.");
+      return;
+    }
+
+    const modulosPermitidos = modulosPermitidosPorPerfil(
+      form.tipo_permissao
+    );
+    const possuiModuloAtivo = MODULOS_SISTEMA.some((modulo) => {
+      const chave = `acesso_${modulo}` as keyof Formulario;
+      return modulosPermitidos[modulo] && Boolean(form[chave]);
+    });
+
+    if (form.ativo && !possuiModuloAtivo) {
+      setErro("Selecione pelo menos um módulo para o usuário ativo.");
       return;
     }
 
@@ -476,7 +492,7 @@ export function GerenciamentoPermissoesV2() {
                     item.acesso_editais && "Editais",
                     item.acesso_permissoes && "Permissões",
                     item.acesso_configuracoes && "Configurações",
-                  ].filter(Boolean);
+                  ].filter((modulo): modulo is string => Boolean(modulo));
 
                   return (
                     <tr
@@ -680,6 +696,8 @@ export function GerenciamentoPermissoesV2() {
                     const chave =
                       `acesso_${modulo}` as keyof Formulario;
                     const checked = Boolean(form[chave]);
+                    const permitidoNoPerfil =
+                      modulosPermitidosPorPerfil(form.tipo_permissao)[modulo];
 
                     return (
                       <div
@@ -690,11 +708,19 @@ export function GerenciamentoPermissoesV2() {
                           <p className="text-sm font-extrabold text-slate-800">
                             {ROTULO_MODULO[modulo]}
                           </p>
+                          {!permitidoNoPerfil && (
+                            <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                              Não disponível para este perfil.
+                            </p>
+                          )}
                         </div>
 
                         <Switch
                           checked={checked}
-                          disabled={form.tipo_permissao === "admin"}
+                          disabled={
+                            form.tipo_permissao === "admin" ||
+                            !permitidoNoPerfil
+                          }
                           onChange={(valor) =>
                             alterarModulo(modulo, valor)
                           }

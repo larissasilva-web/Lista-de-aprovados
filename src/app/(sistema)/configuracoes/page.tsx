@@ -3,7 +3,7 @@ import {
 } from "@/components/configuracoes/formulario-configuracoes";
 
 import {
-  exigirPermissao,
+  exigirModulo,
 } from "@/lib/auth/usuario-atual";
 
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/lib/configuracoes/obter-configuracoes";
 
 export default async function ConfiguracoesPage() {
-  await exigirPermissao([
+  await exigirModulo("configuracoes", [
     "admin",
   ]);
 

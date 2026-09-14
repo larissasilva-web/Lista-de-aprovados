@@ -60,6 +60,10 @@ body {
 
 /* Textos */
 
+.dark .text-slate-950 {
+  color: #f8fafc !important;
+}
+
 .dark .text-slate-900 {
   color: #f8fafc !important;
 }

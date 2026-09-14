@@ -128,6 +128,10 @@ function formatarData(value: string | null) {
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
+function normalizarBusca(value: string) {
+  return value.trim().replace(/[(),]/g, " ").replace(/\s+/g, " ");
+}
+
 function classeStatus(status: string) {
   switch (status) {
     case "Aprovado":
@@ -169,7 +173,7 @@ function Kpi({
   );
 }
 
-export function ListaAprovadosV2() {
+export function ListaAprovados() {
   const [contexto, setContexto] = useState<ContextoAcesso | null>(null);
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [opcoes, setOpcoes] = useState<Opcoes>({
@@ -188,6 +192,7 @@ export function ListaAprovadosV2() {
   const [sucesso, setSucesso] = useState("");
   const [detalhe, setDetalhe] = useState<Registro | null>(null);
   const [edicao, setEdicao] = useState<Registro | null>(null);
+  const [subJudiceAberto, setSubJudiceAberto] = useState(false);
 
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const podeEditar = podeOperarLista(contexto);
@@ -229,7 +234,7 @@ export function ListaAprovadosV2() {
       p_cargo: filtros.cargo || null,
       p_codigo_vaga: filtros.codigoVaga || null,
       p_status: filtros.status || null,
-      p_busca: filtros.busca.trim() || null,
+      p_busca: normalizarBusca(filtros.busca) || null,
       p_sub_judice:
         filtros.subJudice === ""
           ? null
@@ -286,9 +291,7 @@ export function ListaAprovadosV2() {
         );
       }
 
-      const termo = filtros.busca
-        .trim()
-        .replace(/[(),]/g, " ");
+      const termo = normalizarBusca(filtros.busca);
 
       if (termo) {
         query = query.or(
@@ -350,6 +353,12 @@ export function ListaAprovadosV2() {
     );
   }, [opcoes.editais, filtros.unidade]);
 
+  const editalSelecionado = useMemo(
+    () =>
+      opcoes.editais.find((item) => item.id === filtros.editalId) ?? null,
+    [opcoes.editais, filtros.editalId]
+  );
+
   function alterarFiltro<K extends keyof Filtros>(
     chave: K,
     valor: Filtros[K]
@@ -374,20 +383,82 @@ export function ListaAprovadosV2() {
     await carregarRegistros();
   }
 
+  async function aposInclusaoSubJudice() {
+    setSubJudiceAberto(false);
+    setSucesso("Candidato Sub judice adicionado com sucesso.");
+    await Promise.all([carregarOpcoes(), carregarRegistros()]);
+  }
+
+  async function removerSubJudice(registro: Registro) {
+    const confirmou = window.confirm(
+      `Remover o candidato Sub judice?\n\n${registro.nome}\n\nA operação ficará registrada nos logs.`
+    );
+
+    if (!confirmou) return;
+
+    setErro("");
+
+    try {
+      const supabase = createClient() as any;
+      const { error } = await supabase.rpc("remover_sub_judice", {
+        p_candidato_id: registro.id,
+      });
+
+      if (error) throw error;
+
+      setDetalhe(null);
+      setSucesso("Candidato Sub judice removido com sucesso.");
+      await carregarRegistros();
+    } catch (e) {
+      setErro(
+        e instanceof Error
+          ? e.message
+          : "Não foi possível remover o candidato Sub judice."
+      );
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <header>
-        <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
-          Recrutamento e seleção
-        </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-          Lista de aprovados
-        </h1>
-        <p className="mt-1 max-w-4xl text-sm font-medium text-slate-500">
-          Acompanhe convocação e contratação com recorte por unidade,
-          edital, vaga, cargo e status. A unidade é herdada diretamente
-          do cadastro do edital.
-        </p>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+            Recrutamento e seleção
+          </p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+            Lista de aprovados
+          </h1>
+          <p className="mt-1 max-w-4xl text-sm font-medium text-slate-500">
+            Acompanhe convocação e contratação com recorte por unidade,
+            edital, vaga, cargo e status. A unidade é herdada diretamente
+            do cadastro do edital.
+          </p>
+        </div>
+
+        {podeEditar && (
+          <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+            <button
+              type="button"
+              disabled={!editalSelecionado || !editalSelecionado.status_edital}
+              onClick={() => setSubJudiceAberto(true)}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-600 px-5 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(124,58,237,0.18)] transition hover:-translate-y-0.5 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+              title={
+                !editalSelecionado
+                  ? "Selecione um edital nos filtros para adicionar um candidato Sub judice."
+                  : !editalSelecionado.status_edital
+                    ? "O edital selecionado está inativo."
+                    : undefined
+              }
+            >
+              + Adicionar Sub judice
+            </button>
+            {!editalSelecionado && (
+              <span className="text-[11px] font-semibold text-slate-400">
+                Selecione um edital para habilitar esta ação.
+              </span>
+            )}
+          </div>
+        )}
       </header>
 
       {erro && (
@@ -402,7 +473,7 @@ export function ListaAprovadosV2() {
         </div>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
         <Kpi titulo="Total na lista" valor={resumo.total} cor="bg-blue-600" />
         <Kpi
           titulo="Aprovados"
@@ -428,6 +499,11 @@ export function ListaAprovadosV2() {
           titulo="Doc. rejeitada"
           valor={resumo.documentacao_rejeitada}
           cor="bg-rose-500"
+        />
+        <Kpi
+          titulo="Migração"
+          valor={resumo.migracao}
+          cor="bg-purple-500"
         />
         <Kpi
           titulo="Sub judice"
@@ -717,11 +793,13 @@ export function ListaAprovadosV2() {
         <DetalhesDrawer
           registro={detalhe}
           podeEditar={podeEditar && detalhe.status_edital}
+          podeRemoverSubJudice={podeEditar && detalhe.sub_judice}
           onClose={() => setDetalhe(null)}
           onEditar={() => {
             setEdicao(detalhe);
             setDetalhe(null);
           }}
+          onRemoverSubJudice={() => void removerSubJudice(detalhe)}
         />
       )}
 
@@ -730,6 +808,14 @@ export function ListaAprovadosV2() {
           registro={edicao}
           onClose={() => setEdicao(null)}
           onSuccess={() => void aposAlteracao()}
+        />
+      )}
+
+      {subJudiceAberto && editalSelecionado && (
+        <AdicionarSubJudiceModalV2
+          edital={editalSelecionado}
+          onClose={() => setSubJudiceAberto(false)}
+          onSuccess={() => void aposInclusaoSubJudice()}
         />
       )}
     </div>
@@ -766,13 +852,17 @@ function CampoSelect({
 function DetalhesDrawer({
   registro,
   podeEditar,
+  podeRemoverSubJudice,
   onClose,
   onEditar,
+  onRemoverSubJudice,
 }: {
   registro: Registro;
   podeEditar: boolean;
+  podeRemoverSubJudice: boolean;
   onClose: () => void;
   onEditar: () => void;
+  onRemoverSubJudice: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-[80] bg-slate-950/40 backdrop-blur-[2px]">
@@ -887,14 +977,28 @@ function DetalhesDrawer({
             </GradeDetalhes>
           </Bloco>
 
-          {podeEditar && (
-            <button
-              type="button"
-              onClick={onEditar}
-              className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-blue-700"
-            >
-              Alterar status
-            </button>
+          {(podeEditar || podeRemoverSubJudice) && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {podeEditar && (
+                <button
+                  type="button"
+                  onClick={onEditar}
+                  className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-blue-700"
+                >
+                  Alterar status
+                </button>
+              )}
+
+              {podeRemoverSubJudice && (
+                <button
+                  type="button"
+                  onClick={onRemoverSubJudice}
+                  className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 hover:bg-rose-100"
+                >
+                  Remover Sub judice
+                </button>
+              )}
+            </div>
           )}
         </div>
       </aside>
@@ -932,6 +1036,318 @@ function Dado({ label, value }: { label: string; value: string }) {
       <p className="mt-1 break-words text-sm font-extrabold text-slate-900">
         {value}
       </p>
+    </div>
+  );
+}
+
+function AdicionarSubJudiceModalV2({
+  edital,
+  onClose,
+  onSuccess,
+}: {
+  edital: EditalOpcao;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [cargos, setCargos] = useState<string[]>([]);
+  const [codigosVaga, setCodigosVaga] = useState<string[]>([]);
+  const [cargo, setCargo] = useState("");
+  const [codigoVaga, setCodigoVaga] = useState("");
+  const [nome, setNome] = useState("");
+  const [modalidade, setModalidade] = useState("");
+  const [nota, setNota] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarCargos() {
+      setCarregando(true);
+      setErro("");
+
+      try {
+        const supabase = createClient() as any;
+        const { data, error } = await supabase.rpc("listar_cargos_edital", {
+          p_edital_id: edital.id,
+        });
+
+        if (error) throw error;
+
+        const lista = ((data ?? []) as Array<{ cargo: string | null }>)
+          .map((item) => item.cargo?.trim() ?? "")
+          .filter(Boolean);
+
+        if (ativo) setCargos(lista);
+      } catch (e) {
+        if (ativo) {
+          setErro(
+            e instanceof Error
+              ? e.message
+              : "Não foi possível carregar os cargos do edital."
+          );
+        }
+      } finally {
+        if (ativo) setCarregando(false);
+      }
+    }
+
+    void carregarCargos();
+
+    return () => {
+      ativo = false;
+    };
+  }, [edital.id]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarCodigos() {
+      setCodigoVaga("");
+      setCodigosVaga([]);
+
+      if (!cargo) return;
+
+      try {
+        const supabase = createClient() as any;
+        const { data, error } = await supabase.rpc(
+          "listar_codigos_vaga_edital",
+          {
+            p_edital_id: edital.id,
+            p_cargo: cargo,
+          }
+        );
+
+        if (error) throw error;
+
+        const lista = ((data ?? []) as Array<{ codigo_vaga: string | null }>)
+          .map((item) => item.codigo_vaga?.trim() ?? "")
+          .filter(Boolean);
+
+        if (ativo) setCodigosVaga(lista);
+      } catch (e) {
+        if (ativo) {
+          setErro(
+            e instanceof Error
+              ? e.message
+              : "Não foi possível carregar os códigos de vaga."
+          );
+        }
+      }
+    }
+
+    void carregarCodigos();
+
+    return () => {
+      ativo = false;
+    };
+  }, [cargo, edital.id]);
+
+  async function salvar(event: FormEvent) {
+    event.preventDefault();
+    setErro("");
+
+    if (!edital.status_edital) {
+      setErro("O edital está inativo.");
+      return;
+    }
+
+    if (!cargo) {
+      setErro("Selecione o cargo.");
+      return;
+    }
+
+    if (!codigoVaga) {
+      setErro("Selecione o código da vaga.");
+      return;
+    }
+
+    if (!nome.trim()) {
+      setErro("Informe o nome do candidato.");
+      return;
+    }
+
+    if (!modalidade.trim()) {
+      setErro("Informe a modalidade de candidatura.");
+      return;
+    }
+
+    const notaNumerica = Number(nota.replace(",", "."));
+
+    if (!Number.isFinite(notaNumerica) || notaNumerica < 0) {
+      setErro("Informe uma nota válida.");
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      const supabase = createClient() as any;
+      const { error } = await supabase.rpc("adicionar_sub_judice", {
+        p_edital_id: edital.id,
+        p_codigo_vaga: codigoVaga,
+        p_cargo: cargo,
+        p_nome: nome.trim(),
+        p_modalidade_candidatura: modalidade.trim(),
+        p_nota: notaNumerica,
+      });
+
+      if (error) throw error;
+      onSuccess();
+    } catch (e) {
+      setErro(
+        e instanceof Error
+          ? e.message
+          : "Não foi possível adicionar o candidato Sub judice."
+      );
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/40 p-4 backdrop-blur-[2px]">
+      <form
+        onSubmit={salvar}
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      >
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.1em] text-violet-700">
+              Decisão judicial
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">
+              Adicionar candidato Sub judice
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Edital {edital.edital}
+              {edital.unidade ? ` · ${edital.unidade}` : ""}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={salvando}
+            className="grid h-9 w-9 place-items-center rounded-full text-xl font-bold text-slate-500 hover:bg-slate-100"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="space-y-4 px-6 py-5">
+          {erro && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+              {erro}
+            </div>
+          )}
+
+          {carregando ? (
+            <p className="rounded-xl bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-500">
+              Carregando cargos do edital...
+            </p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs font-extrabold text-slate-500">
+                  Cargo *
+                </span>
+                <select
+                  required
+                  value={cargo}
+                  onChange={(e) => setCargo(e.target.value)}
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold"
+                >
+                  <option value="">Selecione o cargo</option>
+                  {cargos.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="text-xs font-extrabold text-slate-500">
+                  Código da vaga *
+                </span>
+                <select
+                  required
+                  disabled={!cargo}
+                  value={codigoVaga}
+                  onChange={(e) => setCodigoVaga(e.target.value)}
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold disabled:opacity-50"
+                >
+                  <option value="">Selecione</option>
+                  {codigosVaga.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="text-xs font-extrabold text-slate-500">
+                  Nota *
+                </span>
+                <input
+                  required
+                  inputMode="decimal"
+                  value={nota}
+                  onChange={(e) => setNota(e.target.value)}
+                  placeholder="Ex.: 15,5"
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold"
+                />
+              </label>
+
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs font-extrabold text-slate-500">
+                  Nome do candidato *
+                </span>
+                <input
+                  required
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold"
+                />
+              </label>
+
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs font-extrabold text-slate-500">
+                  Modalidade de candidatura *
+                </span>
+                <input
+                  required
+                  value={modalidade}
+                  onChange={(e) => setModalidade(e.target.value)}
+                  placeholder="Ex.: Ampla concorrência"
+                  className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 font-semibold"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        <footer className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+          <button
+            type="button"
+            disabled={salvando}
+            onClick={onClose}
+            className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={salvando || carregando || !edital.status_edital}
+            className="min-h-10 rounded-xl bg-violet-600 px-5 text-sm font-extrabold text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {salvando ? "Salvando..." : "Adicionar Sub judice"}
+          </button>
+        </footer>
+      </form>
     </div>
   );
 }
@@ -978,12 +1394,10 @@ function AlterarStatusModalV2({
       const payload: Record<string, unknown> = {
         status,
         processo_sei: processoSei.trim() || null,
+        matricula: status === "Contratado" ? matricula.trim() : null,
+        data_contratacao:
+          status === "Contratado" ? dataContratacao : null,
       };
-
-      if (status === "Contratado") {
-        payload.matricula = matricula.trim();
-        payload.data_contratacao = dataContratacao;
-      }
 
       const { error } = await supabase
         .from("lista_aprovados")
