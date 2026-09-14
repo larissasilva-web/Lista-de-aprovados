@@ -14,6 +14,12 @@ import {
   createClient,
 } from "@/lib/supabase/client";
 
+import {
+  obterUnidadeCanonica,
+  UNIDADES_SAUDE_INDIGENA,
+  unidadeSaudeIndigenaValida,
+} from "@/lib/editais/unidades";
+
 type FonteIntegracao = {
   edital_id: string;
 
@@ -38,6 +44,8 @@ type Edital = {
   processo_seletivo: string;
 
   edital: string;
+
+  unidade: string | null;
 
   status_edital: boolean;
 
@@ -242,6 +250,11 @@ export function GerenciamentoEditais({
   ] = useState("");
 
   const [
+    unidade,
+    setUnidade,
+  ] = useState("");
+
+  const [
     dataInicio,
     setDataInicio,
   ] = useState("");
@@ -322,6 +335,13 @@ export function GerenciamentoEditais({
               )
               .includes(
                 termo
+              ) ||
+            (item.unidade ?? "")
+              .toLocaleLowerCase(
+                "pt-BR"
+              )
+              .includes(
+                termo
               );
 
           const correspondeStatus =
@@ -367,6 +387,11 @@ export function GerenciamentoEditais({
 
     setNomeEdital(
       edital.edital
+    );
+
+    setUnidade(
+      edital.unidade ??
+        ""
     );
 
     setDataInicio(
@@ -444,10 +469,25 @@ export function GerenciamentoEditais({
 
     if (
       !processo ||
-      !nomeEdital.trim()
+      !nomeEdital.trim() ||
+      !unidade.trim()
     ) {
       setErro(
-        "Preencha o processo seletivo e o edital."
+        "Preencha o processo seletivo, o edital e a unidade."
+      );
+
+      return;
+    }
+
+    if (
+      processo ===
+        "Saúde Indígena" &&
+      !unidadeSaudeIndigenaValida(
+        unidade
+      )
+    ) {
+      setErro(
+        "Selecione uma unidade válida da Saúde Indígena."
       );
 
       return;
@@ -489,6 +529,14 @@ export function GerenciamentoEditais({
       return;
     }
 
+    const unidadeFinal =
+      processo ===
+      "Saúde Indígena"
+        ? obterUnidadeCanonica(
+            unidade
+          )
+        : unidade.trim();
+
     let pastaAnaliseId = "";
     let pastaEntrevistasId = "";
     let planilhaCruzamentoId = "";
@@ -520,17 +568,23 @@ export function GerenciamentoEditais({
         return;
       }
 
-      if (!pastaEntrevistasId) {
+      if (
+        pastaEntrevistas.trim() &&
+        !pastaEntrevistasId
+      ) {
         setErro(
-          "Informe um ID ou link válido para a pasta de entrevistas."
+          "O ID ou link informado para a pasta de entrevistas é inválido."
         );
 
         return;
       }
 
-      if (!planilhaCruzamentoId) {
+      if (
+        planilhaCruzamento.trim() &&
+        !planilhaCruzamentoId
+      ) {
         setErro(
-          "Informe um ID ou link válido para a planilha de cruzamento."
+          "O ID ou link informado para a planilha de cruzamento é inválido."
         );
 
         return;
@@ -555,6 +609,9 @@ export function GerenciamentoEditais({
 
           edital:
             nomeEdital.trim(),
+
+          unidade:
+            unidadeFinal,
 
           data_inicio:
             dataInicio ||
@@ -598,10 +655,12 @@ export function GerenciamentoEditais({
                   pastaAnaliseId,
 
                 pasta_entrevistas_id:
-                  pastaEntrevistasId,
+                  pastaEntrevistasId ||
+                  null,
 
                 planilha_cruzamento_id:
-                  planilhaCruzamentoId,
+                  planilhaCruzamentoId ||
+                  null,
 
                 etl_habilitado:
                   true,
@@ -883,7 +942,7 @@ export function GerenciamentoEditais({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1320px]">
+          <table className="w-full min-w-[1480px]">
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200">
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
@@ -892,6 +951,10 @@ export function GerenciamentoEditais({
 
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
                   Edital
+                </th>
+
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Unidade
                 </th>
 
                 <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-slate-500">
@@ -930,7 +993,7 @@ export function GerenciamentoEditais({
                 <tr>
                   <td
                     colSpan={
-                      9
+                      10
                     }
                     className="px-5 py-12 text-center text-sm text-slate-500"
                   >
@@ -961,6 +1024,11 @@ export function GerenciamentoEditais({
                           {
                             edital.edital
                           }
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {edital.unidade ||
+                            "—"}
                         </td>
 
                         <td className="px-5 py-4 text-sm text-slate-600">
@@ -1184,6 +1252,53 @@ export function GerenciamentoEditais({
                   />
                 </div>
 
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Unidade *
+                  </label>
+
+                  <input
+                    required
+                    list={
+                      processo ===
+                      "Saúde Indígena"
+                        ? "unidades-saude-indigena-edicao"
+                        : undefined
+                    }
+                    value={
+                      unidade
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setUnidade(
+                        event.target.value
+                      )
+                    }
+                    placeholder={
+                      processo ===
+                      "Saúde Indígena"
+                        ? "Ex.: DSEI Médio Rio Purus"
+                        : "Informe a unidade"
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                  />
+
+                  {processo ===
+                    "Saúde Indígena" && (
+                    <datalist id="unidades-saude-indigena-edicao">
+                      {UNIDADES_SAUDE_INDIGENA.map(
+                        (item) => (
+                          <option
+                            key={item}
+                            value={item}
+                          />
+                        )
+                      )}
+                    </datalist>
+                  )}
+                </div>
+
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -1375,7 +1490,7 @@ export function GerenciamentoEditais({
 
                         <div>
                           <label className="mb-2 block text-sm font-medium text-slate-700">
-                            Pasta de entrevistas *
+                            Pasta de entrevistas (opcional / legado)
                           </label>
 
                           <input
@@ -1396,7 +1511,7 @@ export function GerenciamentoEditais({
 
                         <div>
                           <label className="mb-2 block text-sm font-medium text-slate-700">
-                            Planilha de cruzamento *
+                            Planilha de cruzamento (quando disponível)
                           </label>
 
                           <input
@@ -1416,7 +1531,7 @@ export function GerenciamentoEditais({
                         </div>
 
                         <p className="text-xs leading-5 text-slate-500">
-                          Você pode colar o link completo do Google Drive/Sheets. O sistema salva somente o ID necessário para o ETL.
+                          Para o novo fluxo, somente a pasta de análise é obrigatória no início. A planilha de cruzamento pode ser informada quando o resultado final estiver disponível.
                         </p>
                       </div>
                     )}

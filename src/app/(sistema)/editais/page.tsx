@@ -7,6 +7,10 @@ import {
 } from "@/components/editais/nova-lista-modal";
 
 import {
+  NovoEditalModal,
+} from "@/components/editais/novo-edital-modal";
+
+import {
   exigirPermissao,
 } from "@/lib/auth/usuario-atual";
 
@@ -56,6 +60,7 @@ export default async function EditaisPage() {
       id,
       processo_seletivo,
       edital,
+      unidade,
       status_edital,
       data_inicio,
       data_fim,
@@ -115,7 +120,6 @@ export default async function EditaisPage() {
     ).map(
       (edital) => ({
         ...edital,
-
         fonte_integracao:
           fontesPorEdital.get(
             edital.id
@@ -140,7 +144,10 @@ export default async function EditaisPage() {
           </p>
         </div>
 
-        <NovaListaModal />
+        <div className="flex flex-wrap gap-3">
+          <NovoEditalModal />
+          <NovaListaModal />
+        </div>
       </div>
 
       <GerenciamentoEditais
