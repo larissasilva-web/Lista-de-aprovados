@@ -1,12 +1,17 @@
 import os
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
-from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+
+# etl/ no sys.path para alcançar o módulo de autenticação comum.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from google_auth import descrever_modo, obter_credenciais  # noqa: E402
 
 
 # ============================================================
@@ -27,6 +32,12 @@ SPREADSHEET_ID = "1ZGZRl8m9A2T2lWlQkxKWq-xqQECLAkbqUuihMkOtLyk"
 SHEET_NAME = "Resultado"
 
 CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE")
+
+# Opcional: agir em nome de um usuário do Workspace em vez da própria
+# conta de serviço. Exige delegação em todo o domínio autorizada.
+IMPERSONATE_USER = (
+    os.getenv("GOOGLE_IMPERSONATE_USER") or ""
+).strip() or None
 
 if not CREDENTIALS_FILE:
     raise RuntimeError(
@@ -206,14 +217,12 @@ def edital_sem_etapa_entrevista(edital):
 
 def ler_planilha():
 
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets.readonly"
-    ]
-
-    credentials = Credentials.from_service_account_file(
-        CREDENTIALS_FILE,
-        scopes=scopes,
+    credentials = obter_credenciais(
+        arquivo_credenciais=CREDENTIALS_FILE,
+        impersonar=IMPERSONATE_USER,
     )
+
+    print(f"Autenticação: {descrever_modo()}")
 
     service = build(
         "sheets",

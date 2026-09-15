@@ -109,7 +109,10 @@ def main() -> int:
 
     cfg = obter_config()
     banco = Banco(cfg.database_url, cfg.db_schema)
-    google = GoogleClient(str(cfg.google_credentials_file))
+    google = GoogleClient(
+        str(cfg.google_credentials_file),
+        impersonar=cfg.google_impersonate_user,
+    )
 
     if args.planilha_id:
         arquivo = google.obter_arquivo(args.planilha_id)

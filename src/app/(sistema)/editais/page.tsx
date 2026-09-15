@@ -3,10 +3,6 @@ import {
 } from "@/components/editais/gerenciamento-editais";
 
 import {
-  NovaListaModal,
-} from "@/components/editais/nova-lista-modal";
-
-import {
   NovoEditalModal,
 } from "@/components/editais/novo-edital-modal";
 
@@ -114,8 +110,6 @@ export default async function EditaisPage() {
     usuarioAtual.tipoPermissao ===
     "admin";
 
-  // O gestor de edital cadastra novos editais, mas nao altera,
-  // inativa nem exclui os que ja estao cadastrados.
   const podeAlterarEditais =
     podeEditarEdital(
       usuarioAtual.tipoPermissao
@@ -136,10 +130,6 @@ export default async function EditaisPage() {
 
         <div className="flex flex-wrap gap-3">
           <NovoEditalModal />
-
-          {podeAlterarEditais && (
-            <NovaListaModal />
-          )}
         </div>
       </div>
 

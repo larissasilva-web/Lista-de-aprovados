@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
-from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+# etl/ na raiz do sys.path para alcançar o módulo de autenticação comum.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-SCOPES = [
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-]
+from google_auth import ESCOPOS as SCOPES  # noqa: E402
+from google_auth import obter_credenciais  # noqa: E402
 MIME_GOOGLE_SHEETS = "application/vnd.google-apps.spreadsheet"
 
 
@@ -26,8 +27,17 @@ class ArquivoGoogle:
 
 
 class GoogleClient:
-    def __init__(self, credentials_file: str):
-        credentials = Credentials.from_service_account_file(credentials_file, scopes=SCOPES)
+    def __init__(self, credentials_file: str, impersonar: str | None = None):
+        """
+        A credencial usada depende do que estiver configurado no .env.local.
+        Ver etl/google_auth.py: OAuth de usuario, conta de servico com
+        personificacao ou conta de servico pura.
+        """
+        credentials = obter_credenciais(
+            arquivo_credenciais=credentials_file,
+            impersonar=impersonar,
+        )
+
         self.drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self.sheets = build("sheets", "v4", credentials=credentials, cache_discovery=False)
 

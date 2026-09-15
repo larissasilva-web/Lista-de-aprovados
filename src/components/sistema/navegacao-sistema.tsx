@@ -693,6 +693,75 @@ export function NavegacaoSistema({
 
                 </Link>
 
+                <Link
+                  href="/dashboards/acompanhamento-analises"
+                  title={
+                    recolhida
+                      ? "Acompanhamento das análises"
+                      : undefined
+                  }
+                  onClick={
+                    onFecharMobile
+                  }
+                  className={`
+                    flex
+                    min-h-10
+                    items-center
+                    gap-3
+                    rounded-lg
+                    px-3
+                    text-sm
+                    transition
+
+                    ${
+                      recolhida
+                        ? "lg:justify-center"
+                        : ""
+                    }
+                  `}
+                  style={{
+                    backgroundColor:
+                      pathname ===
+                        "/dashboards/acompanhamento-analises" ||
+                      pathname.startsWith(
+                        "/dashboards/acompanhamento-analises/"
+                      )
+                        ? configuracao.corPrimaria
+                        : "transparent",
+
+                    color:
+                      pathname ===
+                        "/dashboards/acompanhamento-analises" ||
+                      pathname.startsWith(
+                        "/dashboards/acompanhamento-analises/"
+                      )
+                        ? "#FFFFFF"
+                        : configuracao.corTextoSidebar,
+                  }}
+                >
+
+                  <span
+                    className="
+                      h-1.5
+                      w-1.5
+                      shrink-0
+                      rounded-full
+                      bg-current
+                    "
+                  />
+
+                  <span
+                    className={
+                      recolhida
+                        ? "lg:hidden"
+                        : ""
+                    }
+                  >
+                    Acompanhamento das análises
+                  </span>
+
+                </Link>
+
               </div>
 
             )}

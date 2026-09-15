@@ -15,6 +15,10 @@ import {
 } from "@/lib/supabase/client";
 
 import {
+  ImportarListaEdital,
+} from "@/components/editais/importar-lista-edital";
+
+import {
   obterUnidadeCanonica,
   UNIDADES_SAUDE_INDIGENA,
   unidadeSaudeIndigenaValida,
@@ -1552,8 +1556,20 @@ export function GerenciamentoEditais({
                   </div>
                 )}
 
+                {podeEditar && (
+                  <ImportarListaEdital
+                    editalId={editalEditando.id}
+                    editalNome={editalEditando.edital}
+                    planilhaCruzamentoInformada={
+                      Boolean(
+                        planilhaCruzamento.trim()
+                      )
+                    }
+                  />
+                )}
+
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                  A edição altera somente os dados cadastrais do edital. A lista/anexo original de aprovados não é substituída.
+                  A edição dos dados do edital não substitui automaticamente a lista de aprovados. Quando não houver planilha de cruzamento, a lista pode ser importada manualmente acima.
                 </div>
               </div>
 

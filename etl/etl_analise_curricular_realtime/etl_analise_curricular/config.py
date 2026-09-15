@@ -54,6 +54,7 @@ def _montar_database_url() -> str:
 class Config:
     database_url: str
     google_credentials_file: Path
+    google_impersonate_user: str | None
     db_schema: str
     analise_sheet_name: str
     importacao_sheet_name: str
@@ -77,6 +78,7 @@ def obter_config() -> Config:
     return Config(
         database_url=_montar_database_url(),
         google_credentials_file=cred_path,
+        google_impersonate_user=(os.getenv("GOOGLE_IMPERSONATE_USER") or "").strip() or None,
         db_schema=schema,
         analise_sheet_name=(os.getenv("ANALISE_SHEET_NAME") or "APTOS PARA ANÁLISE").strip(),
         importacao_sheet_name=(os.getenv("IMPORTACAO_SHEET_NAME") or "IMPORTACAO EMPREGARE").strip(),

@@ -77,7 +77,6 @@ type Resumo = {
 };
 
 type Filtros = {
-  busca: string;
   unidade: string;
   editalId: string;
   cargo: string;
@@ -87,7 +86,6 @@ type Filtros = {
 };
 
 const FILTROS_INICIAIS: Filtros = {
-  busca: "",
   unidade: "",
   editalId: "",
   cargo: "",
@@ -126,10 +124,6 @@ function formatarData(value: string | null) {
   if (partes.length !== 3) return value;
 
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
-
-function normalizarBusca(value: string) {
-  return value.trim().replace(/[(),]/g, " ").replace(/\s+/g, " ");
 }
 
 function classeStatus(status: string) {
@@ -234,7 +228,7 @@ export function ListaAprovados() {
       p_cargo: filtros.cargo || null,
       p_codigo_vaga: filtros.codigoVaga || null,
       p_status: filtros.status || null,
-      p_busca: normalizarBusca(filtros.busca) || null,
+      p_busca: null,
       p_sub_judice:
         filtros.subJudice === ""
           ? null
@@ -288,18 +282,6 @@ export function ListaAprovados() {
         query = query.eq(
           "sub_judice",
           filtros.subJudice === "sim"
-        );
-      }
-
-      const termo = normalizarBusca(filtros.busca);
-
-      if (termo) {
-        query = query.or(
-          [
-            `nome.ilike.%${termo}%`,
-            `matricula.ilike.%${termo}%`,
-            `processo_sei.ilike.%${termo}%`,
-          ].join(",")
         );
       }
 
@@ -513,19 +495,7 @@ export function ListaAprovados() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_4px_18px_rgba(15,23,42,0.045)]">
-        <div className="grid gap-3 lg:grid-cols-3 2xl:grid-cols-7">
-          <label className="grid gap-1.5 lg:col-span-2 2xl:col-span-2">
-            <span className="text-xs font-extrabold text-slate-500">
-              Buscar
-            </span>
-            <input
-              value={filtros.busca}
-              onChange={(e) => alterarFiltro("busca", e.target.value)}
-              placeholder="Candidato, matrícula ou processo SEI"
-              className="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-            />
-          </label>
-
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <CampoSelect
             label="Unidade"
             value={filtros.unidade}
@@ -642,19 +612,15 @@ export function ListaAprovados() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1350px] w-full border-collapse text-left">
+          <table className="min-w-[1000px] w-full border-collapse text-left">
             <thead className="bg-slate-50">
               <tr className="text-[11px] font-black uppercase tracking-[0.06em] text-slate-500">
-                <th className="px-4 py-3">Unidade</th>
-                <th className="px-4 py-3">Edital</th>
-                <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Cargo</th>
                 <th className="px-4 py-3 text-center">Class.</th>
                 <th className="px-4 py-3">Candidato</th>
                 <th className="px-4 py-3">Modalidade</th>
                 <th className="px-4 py-3 text-right">Nota</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Matrícula</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
@@ -666,15 +632,6 @@ export function ListaAprovados() {
                     key={item.id}
                     className="border-t border-slate-100 transition hover:bg-blue-50/60"
                   >
-                    <td className="max-w-[210px] px-4 py-3 text-xs font-semibold text-slate-600">
-                      {item.unidade || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-extrabold text-slate-800">
-                      {item.edital}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">
-                      {item.codigo_vaga}
-                    </td>
                     <td className="max-w-[300px] px-4 py-3 text-sm font-semibold text-slate-700">
                       {item.cargo}
                     </td>
@@ -709,9 +666,6 @@ export function ListaAprovados() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs font-semibold text-slate-600">
-                      {item.matricula || "—"}
-                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <button
@@ -739,7 +693,7 @@ export function ListaAprovados() {
               {!carregando && registros.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={7}
                     className="px-5 py-14 text-center text-sm font-semibold text-slate-500"
                   >
                     Nenhum candidato encontrado para o recorte selecionado.
@@ -750,7 +704,7 @@ export function ListaAprovados() {
               {carregando && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={7}
                     className="px-5 py-14 text-center text-sm font-semibold text-slate-500"
                   >
                     Carregando lista...
